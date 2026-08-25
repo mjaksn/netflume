@@ -126,6 +126,13 @@ def main():
     print(f"{tried} datagrams, {decoded} of them decoded to a message, "
           f"none raised")
     print(f"decoder stats: {dict(decoder.stats)}")
+    # Worth saying out loud, because the number is startling. Mutation
+    # randomises sequence numbers, so almost every datagram looks to the gap
+    # tracker like an enormous jump, and missed_exports runs into the
+    # hundreds of millions in seconds. That is the counter working, not a
+    # fault, and it is not a measurement of anything.
+    print("sequence counters above are noise by construction: mutation "
+          "randomises sequence numbers, so every export looks like a gap")
     return 0
 
 
