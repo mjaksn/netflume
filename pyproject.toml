@@ -1,0 +1,68 @@
+[build-system]
+requires = ["setuptools>=77"]        # PEP 639 licence expressions
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "netflume"
+version = "0.1.0"
+description = "NetFlow v5, NetFlow v9 and IPFIX collection and parsing as a Python library. Standard library only, no dependencies"
+readme = "README.md"
+requires-python = ">=3.9"
+license = "MIT"
+license-files = ["LICENSE"]
+authors = [{ name = "mjaksn" }]
+keywords = ["netflow", "ipfix", "netflow9", "flow", "collector", "network"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: System Administrators",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3 :: Only",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: System :: Networking :: Monitoring",
+    "Typing :: Typed",
+]
+
+# No dependencies, and none wanted. A collector is infrastructure: it should be
+# droppable onto a router, a jump host or a container with nothing but a Python
+# interpreter, and it should never be the reason a security update is blocked.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/mjaksn/netflume"
+Source = "https://github.com/mjaksn/netflume"
+Issues = "https://github.com/mjaksn/netflume/issues"
+Changelog = "https://github.com/mjaksn/netflume/blob/main/CHANGELOG.md"
+
+[tool.setuptools]
+# Named explicitly rather than auto-discovered: the flat layout puts `tests`
+# beside the package and it has an __init__.py, so discovery would ship it.
+packages = ["netflume"]
+
+[tool.setuptools.package-data]
+# Without this the marker is left out of the wheel and the annotations are
+# invisible to anyone type checking against the installed package.
+netflume = ["py.typed"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+# Correctness and tidiness, not modernisation. The pyupgrade rules would ask
+# for `X | None` and builtin generics, which read better but which this
+# package cannot use in anger while it supports 3.9.
+select = ["E", "F", "W", "I", "B"]
+
+[tool.mypy]
+files = ["netflume"]
+ignore_missing_imports = true
+# Deliberately not --strict. The wire decoder hands back dictionaries whose
+# shape depends on what an exporter chose to send, and pretending otherwise
+# would mean casts everywhere saying nothing. The typed layer over them is
+# where annotations earn their keep, and it is checked like the rest.

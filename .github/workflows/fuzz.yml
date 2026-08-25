@@ -1,0 +1,46 @@
+name: Fuzz
+
+# On demand and after a merge. Deliberately NOT on pull requests the way CI
+# is, and deliberately not part of the merge gate. A fuzz run is exploratory:
+# it either finds something new or it does not, and a required check that
+# occasionally fails for a reason nobody has seen before is a check people
+# learn to click past. Running it on every push to a pull request would spend
+# minutes per push on exactly that. Read its output; do not let it block you.
+on:
+  workflow_dispatch:
+    inputs:
+      seconds:
+        description: how long to fuzz for
+        default: "120"
+        required: false
+      seed:
+        description: fix the seed to reproduce a previous run
+        default: ""
+        required: false
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fuzz-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  fuzz:
+    name: malformed datagrams
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          python-version: "3.12"
+      - name: throw rubbish at the decoder
+        # decode() promises never to raise, whatever arrives. This is the one
+        # part of the package that reads bytes chosen by whoever can reach the
+        # socket, so the promise is worth attacking rather than trusting.
+        run: |
+          python tools/fuzz.py \
+            --seconds "${{ github.event.inputs.seconds || '120' }}" \
+            ${{ github.event.inputs.seed && format('--seed {0}', github.event.inputs.seed) || '' }}
