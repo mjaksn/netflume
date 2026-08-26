@@ -2,6 +2,7 @@
 
 [![CI](https://github.com/mjaksn/netflume/actions/workflows/ci.yml/badge.svg)](https://github.com/mjaksn/netflume/actions/workflows/ci.yml)
 [![Release](https://github.com/mjaksn/netflume/actions/workflows/release.yml/badge.svg)](https://github.com/mjaksn/netflume/actions/workflows/release.yml)
+[![PyPI](https://img.shields.io/pypi/v/netflume)](https://pypi.org/project/netflume/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mjaksn/netflume/blob/main/LICENSE)
 
 NetFlow v5, NetFlow v9 and IPFIX collection and parsing, as a library. Standard
