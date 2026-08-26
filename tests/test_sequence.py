@@ -2,8 +2,9 @@
 
 import unittest
 
-from netflume import MAX_PLAUSIBLE_GAP, RESYNC_AFTER, SEQ_MODULUS, SequenceWatch
+from netflume import SequenceWatch
 from netflume.events import ExportGap
+from netflume.sequence import MAX_PLAUSIBLE_GAP, RESYNC_AFTER, SEQ_MODULUS
 
 
 class LearningHowAnExporterCounts(unittest.TestCase):

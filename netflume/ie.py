@@ -10,6 +10,8 @@ this table does not know are still decoded and still delivered, under
 so an unrecognised field is never a lost field.
 """
 
+__all__ = ["FLOW_END_REASON", "IE", "PROTO_NAMES", "TCP_FLAG_BITS"]
+
 IE = {
     1: ("octets", "uint"),
     2: ("packets", "uint"),
