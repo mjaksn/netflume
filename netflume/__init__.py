@@ -80,7 +80,7 @@ from .values import (
                     tcp_flags_str,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.1.1"
 
 # A library that logs to an unconfigured root logger prints to stderr, which is
 # exactly what this package exists not to do.
