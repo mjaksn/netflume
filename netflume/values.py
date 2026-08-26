@@ -13,9 +13,17 @@ from typing import Dict, Optional, Tuple
 
 from .ie import FLOW_END_REASON, PROTO_NAMES, TCP_FLAG_BITS
 
-__all__ = ["addr_kind", "flow_end_reason_name", "proto_name", "service_name",
+__all__ = ["ADDR_KINDS", "EPHEMERAL_FLOOR", "MAX_SERVICE_CACHE", "addr_kind",
+           "flow_end_reason_name", "proto_name", "service_name",
            "tcp_flags_str"]
 
+
+#: Ports at or above this are ephemeral, handed to a client by the kernel for
+#: the life of one connection. A name up there would describe an allocation
+#: rather than a service, so lookups stop here. Exported because a consumer
+#: drawing the same line needs the number this one is drawn at, and a copy of
+#: it in another package is a copy that drifts.
+EPHEMERAL_FLOOR = 49152
 
 #: Ceiling on the service-name cache, as for _addr_kind_cache below. The key
 #: includes the protocol number, which comes off the wire and can be any width
@@ -29,8 +37,9 @@ _service_cache: Dict[Tuple[Optional[int], Optional[int]], Optional[str]] = {}
 def service_name(port, proto):
     """Look up a well known service name for a port. Cached, best effort.
 
-    Returns None for an ephemeral port (49152 and up), for port 0, and for any
-    protocol other than TCP or UDP, since naming those would be a guess.
+    Returns None for an ephemeral port, EPHEMERAL_FLOOR and up, for port 0,
+    and for any protocol other than TCP or UDP, since naming those would be a
+    guess.
 
     This reads the system services database, which on a first miss can touch
     the filesystem, so results are remembered: /etc/services does not change
@@ -44,7 +53,7 @@ def service_name(port, proto):
     a template declares, which makes the key space something an exporter
     controls rather than something bounded by the port range.
     """
-    if port is None or port == 0 or port >= 49152:
+    if port is None or port == 0 or port >= EPHEMERAL_FLOOR:
         return None
     key = (port, proto)
     if key in _service_cache:

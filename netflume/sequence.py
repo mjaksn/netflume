@@ -11,8 +11,7 @@ from collections import Counter, OrderedDict
 
 from .events import ExportGap
 
-__all__ = ["MAX_PLAUSIBLE_GAP", "MAX_REORDER", "MAX_STREAMS", "RESYNC_AFTER",
-           "SEQ_MODULUS", "SequenceWatch"]
+__all__ = ["MAX_STREAMS", "SequenceWatch"]
 
 log = logging.getLogger(__name__)
 

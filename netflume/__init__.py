@@ -46,31 +46,17 @@ from .events import DecodeError, ExportGap, SamplingChange
 from .flow import METADATA_KEYS, MODELLED_FIELDS, Flow
 from .ie import FLOW_END_REASON, IE, PROTO_NAMES, TCP_FLAG_BITS
 from .parse import (
-                    IPFIX_HDR,
                     SUPPORTED_VERSIONS,
-                    V5_HDR,
-                    V5_REC,
-                    V9_HDR,
                     TemplateStore,
-                    decode_value,
                     flow_duration,
                     flow_endpoints,
                     flow_timestamp,
-                    parse_data_record,
                     parse_message,
                     parse_v5,
                     parse_v9_or_ipfix,
-                    read_template_fields,
-                    record_min_length,
 )
 from .sampling import SamplingWatch, sampling_rate
-from .sequence import (
-                    MAX_PLAUSIBLE_GAP,
-                    MAX_REORDER,
-                    RESYNC_AFTER,
-                    SEQ_MODULUS,
-                    SequenceWatch,
-)
+from .sequence import SequenceWatch
 from .values import (
                     ADDR_KINDS,
                     addr_kind,
@@ -80,7 +66,7 @@ from .values import (
                     tcp_flags_str,
 )
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"
 
 # A library that logs to an unconfigured root logger prints to stderr, which is
 # exactly what this package exists not to do.
@@ -93,12 +79,9 @@ __all__ = [
     "Flow", "MODELLED_FIELDS", "METADATA_KEYS",
     # parsing
     "TemplateStore", "parse_message", "parse_v5", "parse_v9_or_ipfix",
-    "parse_data_record", "read_template_fields", "record_min_length",
-    "decode_value", "flow_endpoints", "flow_timestamp", "flow_duration",
-    "SUPPORTED_VERSIONS", "V5_HDR", "V5_REC", "V9_HDR", "IPFIX_HDR",
+    "flow_endpoints", "flow_timestamp", "flow_duration", "SUPPORTED_VERSIONS",
     # what the exporter says about itself
-    "SamplingWatch", "sampling_rate", "SequenceWatch", "SEQ_MODULUS",
-    "MAX_PLAUSIBLE_GAP", "MAX_REORDER", "RESYNC_AFTER",
+    "SamplingWatch", "sampling_rate", "SequenceWatch",
     # events
     "ExportGap", "SamplingChange", "DecodeError",
     # field level helpers

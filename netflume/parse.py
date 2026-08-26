@@ -27,11 +27,9 @@ from socket import inet_ntoa
 from .ie import IE
 
 __all__ = [
-    "IPFIX_HDR", "NTP_EPOCH", "UNSPECIFIED", "V5_HDR", "V5_REC", "V9_HDR",
-    "SUPPORTED_VERSIONS",
-    "TemplateStore", "decode_value", "flow_duration", "flow_endpoints",
-    "flow_timestamp", "parse_data_record", "parse_message", "parse_v5",
-    "parse_v9_or_ipfix", "read_template_fields", "record_min_length",
+    "MAX_TEMPLATES", "NTP_EPOCH", "SUPPORTED_VERSIONS", "UNSPECIFIED",
+    "TemplateStore", "flow_duration", "flow_endpoints", "flow_timestamp",
+    "parse_message", "parse_v5", "parse_v9_or_ipfix",
 ]
 
 SUPPORTED_VERSIONS = (5, 9, 10)

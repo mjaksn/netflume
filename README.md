@@ -81,7 +81,7 @@ next to your code. There are no dependencies to resolve either way.
 
 ```python
 import netflume
-netflume.__version__          # "0.1.0"
+netflume.__version__          # "0.2.0"
 ```
 
 ---
@@ -587,9 +587,8 @@ The store must persist across datagrams. Exporters resend templates only
 periodically, and a data set arriving before its template cannot be decoded at
 all, which is what `deferred` counts.
 
-Also exported, for a caller working at that level: `decode_value`,
-`read_template_fields`, `record_min_length`, `parse_data_record`,
-`flow_endpoints`, `flow_timestamp`, `flow_duration`.
+Also exported, for a caller working with the records directly: `flow_endpoints`,
+`flow_timestamp`, `flow_duration`.
 
 ---
 
@@ -737,7 +736,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-267 tests, no dependencies, about a second. Several use `subTest`, so the
+273 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
@@ -819,6 +818,7 @@ import NTP_EPOCH` does not.
 | `sampling_rate(rec)` | read a 1-in-N rate out of one option record: `None` for silence, `1` for explicitly unsampled |
 | `addr_kind(addr)` | `"private"`, `"public"`, `"multicast"`, `"special"` or `"unknown"`; `ADDR_KINDS` is the tuple |
 | `service_name(port, proto)` | well-known service name, or `None` for ephemeral ports and non-TCP/UDP |
+| `netflume.values.EPHEMERAL_FLOOR` | the port at which `service_name` stops naming, for a consumer drawing the same line |
 | `proto_name(proto)`, `PROTO_NAMES` | IP protocol number to name |
 | `tcp_flags_str(flags)`, `TCP_FLAG_BITS` | flag byte to a readable string |
 | `flow_end_reason_name(code)`, `FLOW_END_REASON` | IE 136 code to a description |
@@ -826,8 +826,6 @@ import NTP_EPOCH` does not.
 | `SUPPORTED_VERSIONS` | `(5, 9, 10)` |
 | `netflume.parse.NTP_EPOCH` | 2208988800, for the timestamp conversion described [above](#the-microsecond-and-nanosecond-timestamps-are-ntp) |
 | `netflume.parse.UNSPECIFIED` | the values treated as "not filled in" when a template repeats a key |
-| `V5_HDR`, `V5_REC`, `V9_HDR`, `IPFIX_HDR` | the `struct.Struct` layouts, for anyone building messages rather than reading them |
-| `SEQ_MODULUS`, `MAX_PLAUSIBLE_GAP`, `MAX_REORDER`, `RESYNC_AFTER` | the sequence watcher's thresholds |
 
 The ceiling constants are in [Ceilings](#ceilings).
 
