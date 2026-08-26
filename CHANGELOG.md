@@ -9,17 +9,6 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
-## [0.1.1] - 2026-08-26
-
-### Documentation
-
-- The README now carries the same badge set as the sibling projects: CI,
-  Release, PyPI version, and licence. Released so that the badges appear on the
-  PyPI project page, which is rendered from the README inside the uploaded
-  distribution and cannot be edited in place.
-
-No code changed in this release.
-
 ## [0.1.0] - 2026-08-24
 
 First release. NetFlow v5, NetFlow v9 and IPFIX decoding, a UDP collector, an
@@ -31,5 +20,4 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
-[0.1.1]: https://github.com/mjaksn/netflume/releases/tag/v0.1.1
 [0.1.0]: https://github.com/mjaksn/netflume/releases/tag/v0.1.0
