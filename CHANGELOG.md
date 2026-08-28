@@ -17,8 +17,10 @@ reachable from `netflume.__all__` plus the module-level names listed under
   PyPI project page, which is rendered from the README inside the uploaded
   distribution and cannot be edited in place.
 
-No code changed in this release. `netflume.__all__` and every module's exports
-are exactly what 0.2.0 published, so nothing a consumer imports has moved.
+Nothing about the library changed. The only code in this release is the version
+number itself, in `pyproject.toml` and `netflume.__version__`. `netflume.__all__`
+and every module's exports are exactly what 0.2.0 published, so nothing a
+consumer imports has moved and no behaviour differs.
 
 ## [0.2.0] - 2026-08-25
 
