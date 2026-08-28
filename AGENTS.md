@@ -164,6 +164,14 @@ Releases are tag driven. The workflow refuses to publish unless the tag,
 the version in `pyproject.toml` and `netflume.__version__` all agree, so
 a version bump touches both files.
 
+Tag the merge commit on `main`, after the pull request has landed, and not
+the branch it came from. A squash merge replaces a branch's commits with
+one of its own, so a tag left behind on the branch names a commit that
+never reaches `main`: `git describe` on `main` then answers with the
+release before it, and the history reads as though the release never
+happened. `v0.2.0` is the one tag here that stays where it was put,
+because no commit on `main` carries the tree it published.
+
 ## Writing conventions
 
 - Python lines wrap at 88 columns, which is the ruff setting.
