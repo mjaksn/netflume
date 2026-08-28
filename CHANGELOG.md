@@ -9,6 +9,17 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [0.2.1] - 2026-08-28
+
+### Documentation
+
+- The README now carries the PyPI badge. Released so that it appears on the
+  PyPI project page, which is rendered from the README inside the uploaded
+  distribution and cannot be edited in place.
+
+No code changed in this release. `netflume.__all__` and every module's exports
+are exactly what 0.2.0 published, so nothing a consumer imports has moved.
+
 ## [0.2.0] - 2026-08-25
 
 ### Changed
@@ -58,5 +69,6 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
+[0.2.1]: https://github.com/mjaksn/netflume/releases/tag/v0.2.1
 [0.2.0]: https://github.com/mjaksn/netflume/releases/tag/v0.2.0
 [0.1.0]: https://github.com/mjaksn/netflume/releases/tag/v0.1.0
