@@ -17,14 +17,24 @@ reachable from `netflume.__all__` plus the module-level names listed under
   PyPI project page, which is rendered from the README inside the uploaded
   distribution and cannot be edited in place.
 
-Nothing about the library changed. The only code in this release is the version
-number itself, in `pyproject.toml` and `netflume.__version__`. `netflume.__all__`
-and every module's exports are exactly what 0.2.0 published, so nothing a
-consumer imports has moved and no behaviour differs.
+Nothing about the library changed since 0.2.0. The only code in this release is
+the version number itself, in `pyproject.toml` and `netflume.__version__`.
+`netflume.__all__` and every module's exports are exactly what 0.2.0 published.
+
+0.2.0 was withdrawn, though, and cannot be installed, so 0.2.1 is the first
+release that carries what it published. Coming from 0.1.0, this release brings
+everything listed under 0.2.0 below with it, the narrowing of `netflume.__all__`
+from 45 names to 33 included, and that narrowing is the one change a consumer
+can be broken by.
 
 ## 0.2.0 - 2026-08-25
 
-Withdrawn.
+**Withdrawn.** The tag, the GitHub release and the files on PyPI have all been
+deleted, so this version is no longer installable and this heading is
+deliberately not a link: there is nowhere left for it to point. What it
+published went out as 0.2.1 instead, unchanged apart from the version number
+and the README's PyPI badge. The entry stays because the changes below are
+real, and anyone upgrading from 0.1.0 meets them.
 
 ### Changed
 
