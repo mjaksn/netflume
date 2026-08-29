@@ -67,6 +67,7 @@ record if that is all you want.
 - [Limitations](#limitations)
 - [Everything else exported](#everything-else-exported)
 - [Roadmap](#roadmap)
+- [Licence](#licence)
 
 ---
 
@@ -200,7 +201,14 @@ and queued as a [`DecodeError`](#events).
 
 A `Message` with no flows in it is not a failure. Template sets, option
 records, and data sets whose template has not arrived yet all produce one, and
-an exporter's first few datagrams are routinely all template.
+an exporter's first few datagrams are routinely all template. `len(message)`
+counts the flows; a message is never falsy, so `if message:` after a `poll`
+does not quietly discard the template-only ones.
+
+`decoder.flows(data, exporter, typed=False, now=None)` is the short form for a
+caller who has bytes and wants only the records: it decodes and returns the
+flow list, or the [`Flow`](#flow-the-typed-view) objects with `typed=True`, and
+gives an empty list rather than None when the datagram did not decode.
 
 | `Message` | |
 | --- | --- |
@@ -376,7 +384,7 @@ one call away for anyone who wants a datetime.
 
 ## Events
 
-Anything the console version would have printed is an object here.
+Anything a console tool would have printed is an object here.
 
 ```python
 for event in decoder.take_events():
@@ -394,9 +402,9 @@ normal answer on a healthy network, so it is cheap to call in a loop. The queue
 holds `MAX_PENDING_EVENTS` and then drops the oldest, counting each drop in
 `decoder.stats["events_dropped"]`: a collector on an open UDP port receives
 things that are not NetFlow, and a caller that never drains must not accumulate
-one event per junk datagram for the life of the process. Each
-class has a `__str__` that explains itself in a sentence, and each is also
-written to the log.
+one event per junk datagram for the life of the process. Each class has a
+`__str__` that explains itself in a sentence, and each is also written to the
+log.
 
 ---
 
@@ -763,9 +771,8 @@ python tools/fuzz.py --seconds 60
 It mutates valid v5, v9 and IPFIX messages with bit flips, truncations,
 splices and implausible length fields, then asserts nothing escapes. One
 decoder runs across the whole session, so template state accumulates and a
-later datagram meets
-whatever an earlier one left behind. A failure prints a hex reproducer and the
-seed that produced it.
+later datagram meets whatever an earlier one left behind. A failure prints a
+hex reproducer and the seed that produced it.
 
 Everything is synthetic. No real exporter was involved, so what the suite proves
 is conformance to the specifications and to its own reading of them, not
