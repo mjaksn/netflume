@@ -22,7 +22,9 @@ number itself, in `pyproject.toml` and `netflume.__version__`. `netflume.__all__
 and every module's exports are exactly what 0.2.0 published, so nothing a
 consumer imports has moved and no behaviour differs.
 
-## [0.2.0] - 2026-08-25
+## 0.2.0 - 2026-08-25
+
+Withdrawn.
 
 ### Changed
 
@@ -72,5 +74,4 @@ Hostname resolution is deliberately not here. It is
 in this one depends on.
 
 [0.2.1]: https://github.com/mjaksn/netflume/releases/tag/v0.2.1
-[0.2.0]: https://github.com/mjaksn/netflume/releases/tag/v0.2.0
 [0.1.0]: https://github.com/mjaksn/netflume/releases/tag/v0.1.0
