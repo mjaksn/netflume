@@ -602,8 +602,9 @@ Also exported, for a caller working with the records directly: `flow_endpoints`,
 
 ## Sketch: logging flows to a database
 
-Real `sqlite3`, so it runs, but the shape is what matters. Swap in whatever
-you actually use. `MODELLED_FIELDS` is the column set precisely so that a new
+Real `sqlite3` rather than pseudocode, but the shape is what matters and
+`record_gap` and `record_sampling` are yours to write. Swap in whatever you
+actually use. `MODELLED_FIELDS` is the column set precisely so that a new
 exporter on the network does not mean a migration.
 
 ```python
