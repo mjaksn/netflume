@@ -169,8 +169,12 @@ the branch it came from. A squash merge replaces a branch's commits with
 one of its own, so a tag left behind on the branch names a commit that
 never reaches `main`: `git describe` on `main` then answers with the
 release before it, and the history reads as though the release never
-happened. `v0.2.0` is the one tag here that stays where it was put,
-because no commit on `main` carries the tree it published.
+happened. `v0.2.0` was tagged that way and is why this rule is written
+down. Its tag, its GitHub release and its files on PyPI have all been
+deleted since, so 0.2.0 survives only as a changelog entry, and that
+entry is deliberately not a link because there is no longer anywhere
+for it to point. What it published was the tree of `20058ce` without
+the PyPI badge line in the README.
 
 ## Writing conventions
 
