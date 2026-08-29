@@ -30,7 +30,7 @@ class SequenceWatch:
     but is widely implemented as counting records instead. Rather than trust
     the version, each stream is watched until one reading lands exactly on the
     next message, and that reading becomes the rule for that stream. Until one
-    does, nothing is reported - the wrong rule would invent a loss on every
+    does, nothing is reported: the wrong rule would invent a loss on every
     message, and a collector that cries wolf about dropped flows is worse than
     one that stays quiet.
 

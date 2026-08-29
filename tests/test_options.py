@@ -1,8 +1,8 @@
 """Option records describe the exporter, not traffic, and must not be flows.
 
-Options data records describe the exporter rather than its traffic, and
-would otherwise inherit: an option data record decoded into the flow list looks
-like a flow with no addresses, and inflates every count downstream.
+An option data record decoded into the flow list looks like a flow with no
+addresses, and inflates every count downstream, so the parser hands the two
+kinds back separately and these tests hold it to that.
 """
 
 import struct
