@@ -18,8 +18,8 @@ name: CI
 # blocked. So dispatch is a convenience here, never the gate.
 #
 # The ruleset on main requires the `gate` job below and nothing else.
-# Requiring the matrix jobs directly would mean naming all ten of them, and
-# renaming one would quietly stop protecting anything.
+# Requiring the matrix jobs directly would mean naming every cell of the
+# matrix, and renaming one would quietly stop protecting anything.
 on:
   workflow_dispatch:
   pull_request:

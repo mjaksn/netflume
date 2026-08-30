@@ -8,12 +8,12 @@ name: Release
 # below. It exchanges a short-lived OIDC token at publish time, so there is no
 # API token living in the repository secrets to leak or to rotate.
 #
-# Nothing is registered yet, because nothing has been published yet. Before the
-# first tag is pushed, add a *pending* publisher from the publishing page of
-# the PyPI account: there is no project to attach an ordinary one to until
-# something has been uploaded, and the first upload is the one that needs it.
-# The publisher names this repository, so renaming the repository later means
-# editing it again.
+# The publisher is registered and every release so far went out through it. It
+# started as a *pending* publisher, added from the publishing page of the PyPI
+# account, which is what a first upload needs: there is no project to attach an
+# ordinary one to until something has been uploaded. It names this repository,
+# this workflow file and the environment below, so renaming any of the three
+# means editing it again.
 on:
   push:
     tags: ["v*"]

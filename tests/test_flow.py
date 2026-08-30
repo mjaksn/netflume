@@ -99,7 +99,7 @@ class AbsentIsNotZero(unittest.TestCase):
 class TheAliasesThatBite(unittest.TestCase):
     def test_octets_total_stands_in_for_octets(self):
         # IE 85 rather than IE 1. A reader that looks only at IE 1 reads
-        # rec["octets"] alone and counted every such exporter as zero bytes.
+        # rec["octets"] alone and counts every such exporter as zero bytes.
         flow = one_flow(p.TOTALS_FLOW_FIELDS, p.totals_flow_payload())
         self.assertEqual(flow.octets, 4096)
         self.assertEqual(flow.packets, 9)
