@@ -246,6 +246,17 @@ class EventBookkeeping(unittest.TestCase):
         decoder.decode(datagram, "10.0.0.1")
         self.assertEqual(decoder.take_events(), [])
 
+    def test_nothing_is_printed(self):
+        import contextlib
+        import io
+        out, err = io.StringIO(), io.StringIO()
+        decoder = Decoder()
+        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
+            decoder.decode(b"\x00", "10.0.0.1")
+            decoder.decode(p.v5_message(sampling_word=(1 << 14) | 100),
+                           "10.0.0.1")
+        self.assertEqual((out.getvalue(), err.getvalue()), ("", ""))
+
 
 class TemplateEvents(unittest.TestCase):
     def setUp(self):
@@ -323,18 +334,6 @@ class TemplateEvents(unittest.TestCase):
         self.assertEqual([e.template_id for e in events
                           if isinstance(e, TemplateLearned)], [400])
         self.assertTrue(any(isinstance(e, DecodeError) for e in events))
-
-
-    def test_nothing_is_printed(self):
-        import contextlib
-        import io
-        out, err = io.StringIO(), io.StringIO()
-        decoder = Decoder()
-        with contextlib.redirect_stdout(out), contextlib.redirect_stderr(err):
-            decoder.decode(b"\x00", "10.0.0.1")
-            decoder.decode(p.v5_message(sampling_word=(1 << 14) | 100),
-                           "10.0.0.1")
-        self.assertEqual((out.getvalue(), err.getvalue()), ("", ""))
 
 
 if __name__ == "__main__":

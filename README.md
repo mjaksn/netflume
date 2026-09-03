@@ -82,7 +82,7 @@ next to your code. There are no dependencies to resolve either way.
 
 ```python
 import netflume
-netflume.__version__          # "0.2.1"
+netflume.__version__          # "0.3.0"
 ```
 
 ---
