@@ -395,16 +395,36 @@ for event in decoder.take_events():
 | --- | --- | --- |
 | `SamplingChange` | `exporter`, `domain`, `rate`, `previous` | a domain stated, or restated, how much it is leaving out |
 | `ExportGap` | `exporter`, `domain`, `version`, `missed`, `unit` | exports that never arrived |
+| `TemplateLearned` | `exporter`, `domain`, `template_id`, `fields`, `options`, `previous` | a template arrived that this decoder did not already hold under that ID, or held differently. `previous` is the layout it replaced, or None when the template is new |
 | `DecodeError` | `exporter`, `reason`, `detail` | a datagram that would not decode. `reason` is `"short"`, `"unsupported"` or `"malformed"` |
 
 `take_events()` hands over what has accumulated and forgets it. Empty is the
-normal answer on a healthy network, so it is cheap to call in a loop. The queue
-holds `MAX_PENDING_EVENTS` and then drops the oldest, counting each drop in
-`decoder.stats["events_dropped"]`: a collector on an open UDP port receives
-things that are not NetFlow, and a caller that never drains must not accumulate
-one event per junk datagram for the life of the process. Each class has a
-`__str__` that explains itself in a sentence, and each is also written to the
-log.
+normal answer on a settled network, so it is cheap to call in a loop. It is
+not the answer at the start of one: the first datagram carrying each of an
+exporter's templates raises a `TemplateLearned`, so a caller that reads any
+event at all as trouble will be wrong about the first minute of every run.
+The queue holds `MAX_PENDING_EVENTS` and then drops the oldest, counting each
+drop in `decoder.stats["events_dropped"]`: a collector on an open UDP port
+receives things that are not NetFlow, and a caller that never drains must not
+accumulate one event per junk datagram for the life of the process. Each class
+has a `__str__` that explains itself in a sentence, and each is also written to
+the log.
+
+Only new and changed templates raise a `TemplateLearned`, exactly as only
+changed rates raise a `SamplingChange`. Exporters resend every template they
+hold every few minutes, which is what lets a collector that started late decode
+anything at all, and an event per resend would be an event per datagram from
+the exporters that prepend their templates to everything. A template evicted
+under [`MAX_TEMPLATES`](#ceilings) and later resent is new again, which is
+truthful: the layout was not held in between, and the data sets that arrived
+meanwhile are counted in `deferred`.
+
+`decoder.templates.take_events()` is where those come from, and a caller
+driving [`parse_message`](#parsing-without-a-socket) rather than a `Decoder`
+reads them there instead. `Decoder.decode` drains the store on every datagram,
+including one whose body then failed to parse: a template set can be sound and
+the set behind it be what raised, and the layout learned from the first is
+still true.
 
 ---
 
@@ -502,6 +522,7 @@ that anyone able to reach the socket can pull on.
 | constant | default | what it bounds | on overflow |
 | --- | --- | --- | --- |
 | `netflume.parse.MAX_TEMPLATES` | 10,000 | learned templates | least recently used evicted |
+| `netflume.parse.MAX_PENDING_TEMPLATES` | 10,000 | `TemplateLearned` events awaiting `decoder.templates.take_events()` | oldest dropped, counted in `decoder.templates.dropped` |
 | `netflume.sequence.MAX_STREAMS` | 10,000 | tracked `(exporter, domain, version)` streams, and their gap counters | least recently seen evicted |
 | `netflume.sampling.MAX_SAMPLING_STREAMS` | 10,000 | remembered sampling rates | least recently seen evicted |
 | `netflume.decoder.MAX_PENDING_EVENTS` | 10,000 | events awaiting `take_events()` | oldest dropped, counted in `stats["events_dropped"]` |
@@ -509,7 +530,13 @@ that anyone able to reach the socket can pull on.
 
 `TemplateStore`, `SequenceWatch` and `SamplingWatch` each take the limit as a
 constructor argument, so a collector facing an unusual number of exporters can
-raise it rather than patch the module.
+raise it rather than patch the module. `TemplateStore` takes two, the second
+being `max_pending`.
+
+A `Decoder` drains the store on every datagram, so `MAX_PENDING_TEMPLATES`
+binds nobody using one: it is there for a caller parsing without a `Decoder`
+and never draining, since an exporter alternating two layouts under one
+template ID raises an event every time it switches.
 
 The defaults are far above any real deployment, since a collector sees tens of
 exporters, each with a handful of domains and templates. Eviction is not free

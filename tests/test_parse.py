@@ -5,6 +5,7 @@ import unittest
 from collections import Counter
 
 from netflume import parse
+from netflume.events import TemplateLearned
 from netflume.parse import TemplateStore, parse_message, parse_v5, parse_v9_or_ipfix
 
 from . import packets as p
@@ -341,6 +342,110 @@ class TemplateStoreBookkeeping(unittest.TestCase):
 
     def test_an_unknown_template_reads_as_absent(self):
         self.assertEqual(self.store.get("e", 0, 999), (None, False))
+
+
+class TemplateStoreEvents(unittest.TestCase):
+    def setUp(self):
+        self.store = TemplateStore()
+
+    def test_a_new_template_raises_one(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        events = self.store.take_events()
+        self.assertEqual(len(events), 1)
+        self.assertIsInstance(events[0], TemplateLearned)
+        self.assertEqual(events[0].exporter, "e")
+        self.assertEqual(events[0].domain, 0)
+        self.assertEqual(events[0].template_id, 400)
+        self.assertEqual(events[0].fields, p.FLOW_FIELDS)
+        self.assertFalse(events[0].options)
+
+    def test_a_new_template_has_no_previous(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.assertIsNone(self.store.take_events()[0].previous)
+
+    def test_taking_them_forgets_them(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.take_events()
+        self.assertEqual(self.store.take_events(), [])
+
+    def test_an_identical_resend_raises_nothing(self):
+        # The whole reason this is not one event per template set. Exporters
+        # resend everything they hold every few minutes.
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.take_events()
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.assertEqual(self.store.take_events(), [])
+
+    def test_a_changed_template_carries_what_it_replaced(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.take_events()
+        self.store.put("e", 0, 400, p.FLOW_FIELDS[:3])
+        events = self.store.take_events()
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].previous, p.FLOW_FIELDS)
+        self.assertEqual(events[0].fields, p.FLOW_FIELDS[:3])
+
+    def test_an_options_template_says_so(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS, options=True)
+        self.assertTrue(self.store.take_events()[0].options)
+
+    def test_the_same_id_from_another_exporter_is_its_own_template(self):
+        self.store.put("e1", 0, 400, p.FLOW_FIELDS)
+        self.store.put("e2", 0, 400, p.FLOW_FIELDS)
+        events = self.store.take_events()
+        self.assertEqual([e.exporter for e in events], ["e1", "e2"])
+        self.assertEqual([e.previous for e in events], [None, None])
+
+    def test_the_same_id_in_another_domain_is_its_own_template(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.put("e", 7, 400, p.FLOW_FIELDS)
+        self.assertEqual([e.domain for e in self.store.take_events()], [0, 7])
+
+    def test_a_template_evicted_and_resent_is_new_again(self):
+        store = TemplateStore(max_templates=1)
+        store.put("e", 0, 400, p.FLOW_FIELDS)
+        store.put("e", 0, 401, p.FLOW_FIELDS)      # evicts 400
+        store.take_events()
+        store.put("e", 0, 400, p.FLOW_FIELDS)
+        events = store.take_events()
+        self.assertEqual(len(events), 1)
+        self.assertIsNone(events[0].previous)
+
+    def test_the_pending_queue_has_a_ceiling(self):
+        # A caller parsing without a Decoder never drains, and an exporter
+        # alternating two layouts under one ID raises an event each time.
+        store = TemplateStore(max_pending=4)
+        for n in range(10):
+            store.put("e", 0, 400, p.FLOW_FIELDS[:1 + n % 3])
+        self.assertEqual(len(store._events), 4)
+        self.assertEqual(store.dropped, 6)
+        self.assertEqual(len(store.take_events()), 4)
+        self.assertEqual(store.dropped, 6)
+
+    def test_the_oldest_are_the_ones_dropped(self):
+        store = TemplateStore(max_pending=2)
+        for tid in (400, 401, 402):
+            store.put("e", 0, tid, p.FLOW_FIELDS)
+        self.assertEqual([e.template_id for e in store.take_events()],
+                         [401, 402])
+
+
+class TemplateLearnedWording(unittest.TestCase):
+    def test_a_new_one_says_it_was_learned(self):
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, False, None)
+        self.assertIn("learned template 400", str(event))
+        self.assertIn("7 fields", str(event))
+
+    def test_a_changed_one_says_it_was_redefined(self):
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS[:1], False,
+                                p.FLOW_FIELDS)
+        self.assertIn("redefined template 400", str(event))
+        self.assertIn("1 field,", str(event))
+        self.assertIn("was 7", str(event))
+
+    def test_an_options_one_says_which_kind_it_is(self):
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, True, None)
+        self.assertIn("options template 400", str(event))
 
 
 class RecordMinLength(unittest.TestCase):

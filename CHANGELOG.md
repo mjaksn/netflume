@@ -9,6 +9,54 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## Unreleased
+
+### Added
+
+- **`TemplateLearned`, so that learning a template is something a caller can
+  hear about.** v9 and IPFIX exporters describe their records before they send
+  any, and every field decoded afterwards is read through that description.
+  Until now the fact never left the library: `stats["templates_new"]` counted
+  the templates and said nothing about which, and a consumer wanting to show
+  or log a layout had to reach into `decoder.templates` and work out for
+  itself what had changed since it last looked.
+
+  The event carries the exporter, the observation domain, the template ID, the
+  fields as (name, kind, length) triples in record order, whether it is an
+  options template, and `previous`: the layout it replaced, or None when the
+  template is new. A template that changes under an ID already in use is the
+  case worth acting on, since every record decoded for that ID afterwards
+  means something different from the ones before it, and `previous` is the
+  only place the old layout still exists by the time a caller sees the event.
+
+  Only new and changed templates raise one, exactly as only changed rates
+  raise a `SamplingChange`. Exporters resend every template they hold every
+  few minutes, and an event per resend would be an event per datagram from the
+  exporters that prepend their templates to everything.
+
+  `decoder.templates.take_events()` is the source, and `Decoder.decode` folds
+  it into its own events on every datagram. It does so on the way out of a
+  datagram that failed to parse as well: a template set can be sound and the
+  set behind it be what raised, and a layout learned from the first is true
+  either way.
+
+- **`netflume.parse.MAX_PENDING_TEMPLATES`**, the ceiling on events awaiting
+  `TemplateStore.take_events()`, with drops counted in `store.dropped` and the
+  limit settable as the store's `max_pending`. A `Decoder` drains on every
+  datagram and never reaches it. It is there for a caller driving
+  `parse_message` without one, since an exporter alternating two layouts under
+  a single template ID raises an event every time it switches, and an unbounded
+  list behind that is a memory leak reachable from the socket.
+
+### Changed
+
+- **`take_events()` is no longer empty on a healthy stream that is still
+  starting up.** The first datagram carrying each of an exporter's templates
+  now raises a `TemplateLearned`. Steady state is unchanged and still quiet, so
+  a caller draining in a loop sees what it always did, but one that reads any
+  event at all as a fault will be wrong about the first minute of a run. Test
+  what an event is before treating it as trouble.
+
 ## [0.2.1] - 2026-08-28
 
 ### Documentation
