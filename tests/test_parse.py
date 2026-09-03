@@ -389,6 +389,46 @@ class TemplateStoreEvents(unittest.TestCase):
         self.store.put("e", 0, 400, p.FLOW_FIELDS, options=True)
         self.assertTrue(self.store.take_events()[0].options)
 
+    def test_a_new_template_has_no_previous_kind_either(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.assertIsNone(self.store.take_events()[0].was_options)
+
+    def test_a_changed_template_carries_the_kind_it_had(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.take_events()
+        self.store.put("e", 0, 400, p.FLOW_FIELDS[:3])
+        self.assertIs(self.store.take_events()[0].was_options, False)
+
+    def test_a_kind_that_flips_is_a_redefinition(self):
+        # One pool of template IDs serves both kinds, so an exporter may reuse
+        # an ID for the other kind without touching a field. Nothing about the
+        # layout moved and everything about where the records go did.
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.take_events()
+        self.assertTrue(self.store.put("e", 0, 400, p.FLOW_FIELDS,
+                                       options=True))
+        events = self.store.take_events()
+        self.assertEqual(len(events), 1)
+        self.assertTrue(events[0].options)
+        self.assertIs(events[0].was_options, False)
+        self.assertEqual(events[0].previous, p.FLOW_FIELDS)
+
+    def test_a_kind_that_flips_is_counted(self):
+        self.store.put("e", 0, 400, p.FLOW_FIELDS)
+        self.store.put("e", 0, 400, p.FLOW_FIELDS, options=True)
+        self.assertEqual(self.store.learned, 2)
+
+    def test_the_event_does_not_hand_out_the_stored_layout(self):
+        # The list in the store is what every later record for this ID is cut
+        # up by. A consumer appending to what it was handed must not be able
+        # to change that, nor make the next resend look like a redefinition.
+        self.store.put("e", 0, 400, list(p.FLOW_FIELDS))
+        event = self.store.take_events()[0]
+        self.assertIsNot(event.fields, self.store.get("e", 0, 400)[0])
+        event.fields.append(("junk", "uint", 99))
+        self.assertEqual(self.store.get("e", 0, 400)[0], p.FLOW_FIELDS)
+        self.assertFalse(self.store.put("e", 0, 400, list(p.FLOW_FIELDS)))
+
     def test_the_same_id_from_another_exporter_is_its_own_template(self):
         self.store.put("e1", 0, 400, p.FLOW_FIELDS)
         self.store.put("e2", 0, 400, p.FLOW_FIELDS)
@@ -432,20 +472,34 @@ class TemplateStoreEvents(unittest.TestCase):
 
 class TemplateLearnedWording(unittest.TestCase):
     def test_a_new_one_says_it_was_learned(self):
-        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, False, None)
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, False, None, None)
         self.assertIn("learned template 400", str(event))
         self.assertIn("7 fields", str(event))
 
     def test_a_changed_one_says_it_was_redefined(self):
         event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS[:1], False,
-                                p.FLOW_FIELDS)
+                                p.FLOW_FIELDS, False)
         self.assertIn("redefined template 400", str(event))
         self.assertIn("1 field,", str(event))
         self.assertIn("was 7", str(event))
 
     def test_an_options_one_says_which_kind_it_is(self):
-        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, True, None)
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, True, None, None)
         self.assertIn("options template 400", str(event))
+
+    def test_a_flipped_kind_says_which_way_it_went(self):
+        # Saying the layout changed here would be a lie: it did not.
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, True,
+                                p.FLOW_FIELDS, False)
+        self.assertIn("redefined template 400 as an options template",
+                      str(event))
+        self.assertIn("option records rather than flow records", str(event))
+
+    def test_a_flip_the_other_way_says_so_too(self):
+        event = TemplateLearned("e", 0, 400, p.FLOW_FIELDS, False,
+                                p.FLOW_FIELDS, True)
+        self.assertIn("redefined template 400 as a data template", str(event))
+        self.assertIn("flow records rather than option records", str(event))
 
 
 class RecordMinLength(unittest.TestCase):

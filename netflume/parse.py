@@ -160,10 +160,23 @@ class TemplateStore:
         while len(self.templates) > self.max_templates:
             self.templates.popitem(last=False)
             self.evicted += 1
-        if old is None or old[0] != fields:
+        # Both halves of the entry, not the layout alone. An exporter may
+        # reuse an ID for the other kind of template without changing a single
+        # field specification, and that is a redefinition worth reporting even
+        # though nothing about the layout moved: every record for that ID
+        # afterwards leaves by the other door, options rather than flows.
+        if old is None or old != (fields, options):
             self.learned += 1
-            event = TemplateLearned(exporter, domain, tid, fields, options,
-                                    None if old is None else old[0])
+            # The event gets a copy. The list handed in stays in the store and
+            # is what every later record for this ID is cut up by, so an event
+            # carrying the same object would let a consumer that appends to
+            # `event.fields` corrupt the decode of the template it was told
+            # about, and make the next resend of it look like a redefinition.
+            # The triples inside are already immutable, so one level is enough.
+            event = TemplateLearned(exporter, domain, tid, list(fields),
+                                    options,
+                                    None if old is None else list(old[0]),
+                                    None if old is None else old[1])
             # A deque with a maxlen drops silently, so the count is taken here
             # rather than read off a length afterwards: a caller that never
             # drains needs to be able to tell a quiet stream from a full queue.

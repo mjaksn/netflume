@@ -221,7 +221,9 @@ class Decoder:
         :class:`~netflume.events.SamplingChange`,
         :class:`~netflume.events.TemplateLearned` and
         :class:`~netflume.events.DecodeError`. Empty is the normal
-        answer on a healthy network, so this is cheap to call in a loop.
+        answer on a settled network, so this is cheap to call in a loop. It
+        is not the answer while one is starting up, since the first datagram
+        carrying each of an exporter's templates raises a TemplateLearned.
         """
         events = list(self._events)
         self._events.clear()
