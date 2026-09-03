@@ -131,6 +131,9 @@ class Decoder:
         A Message with no flows in it is not a failure. Template sets, option
         records and data sets whose template has not arrived yet all produce
         one, and an exporter's first few datagrams are routinely all template.
+        What those datagrams taught is in :meth:`take_events` as
+        :class:`~netflume.events.TemplateLearned`, whether or not this returns
+        a Message.
         """
         self.stats["packets"] += 1
         self.stats["bytes_rx"] += len(data)
@@ -152,8 +155,15 @@ class Decoder:
                     data, exporter, self.templates, self.stats)
         except Exception as exc:      # keep listening even on a bad datagram
             self.stats["parse_errors"] += 1
+            # Drained before the failure is reported and not skipped because
+            # of it. A template set can parse perfectly and the set behind it
+            # be the one that raised, and a layout learned that way is both
+            # true and the thing most worth knowing about a datagram that went
+            # wrong: every later record for that ID is read through it.
+            self._queue(self.templates.take_events())
             return self._fail(exporter, "malformed",
                               f"{type(exc).__name__}: {exc}", counted=True)
+        self._queue(self.templates.take_events())
 
         if hdr is None:
             return self._fail(exporter, "short", "truncated header")
@@ -208,7 +218,8 @@ class Decoder:
         """Hand over everything raised since the last call, and forget it.
 
         A list of :class:`~netflume.events.ExportGap`,
-        :class:`~netflume.events.SamplingChange` and
+        :class:`~netflume.events.SamplingChange`,
+        :class:`~netflume.events.TemplateLearned` and
         :class:`~netflume.events.DecodeError`. Empty is the normal
         answer on a healthy network, so this is cheap to call in a loop.
         """

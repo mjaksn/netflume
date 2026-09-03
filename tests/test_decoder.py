@@ -3,8 +3,13 @@
 import struct
 import unittest
 
-from netflume import Decoder, Flow, Message
-from netflume.events import DecodeError, ExportGap, SamplingChange
+from netflume import Decoder, Flow, Message, TemplateStore
+from netflume.events import (
+    DecodeError,
+    ExportGap,
+    SamplingChange,
+    TemplateLearned,
+)
 
 from . import packets as p
 
@@ -220,10 +225,25 @@ class EventBookkeeping(unittest.TestCase):
         self.assertEqual(len(decoder.take_events()), 1)
         self.assertEqual(decoder.take_events(), [])
 
-    def test_a_healthy_stream_produces_none(self):
+    def test_a_healthy_stream_produces_nothing_but_its_templates(self):
+        # A first template is news and is an event. Nothing else on a stream
+        # that is behaving is, which is the property this has always held.
         decoder = Decoder()
-        decoder.decode(p.ipfix([p.data_template(400, p.FLOW_FIELDS),
-                                p.data_set(400, p.flow_payload())]), "10.0.0.1")
+        datagram = p.ipfix([p.data_template(400, p.FLOW_FIELDS),
+                            p.data_set(400, p.flow_payload())])
+        decoder.decode(datagram, "10.0.0.1")
+        events = decoder.take_events()
+        self.assertEqual([type(e) for e in events], [TemplateLearned])
+
+    def test_a_settled_stream_produces_none(self):
+        # The same datagram again: the exporter is resending a template this
+        # decoder already holds, which is what they all do and is not news.
+        decoder = Decoder()
+        datagram = p.ipfix([p.data_template(400, p.FLOW_FIELDS),
+                            p.data_set(400, p.flow_payload())])
+        decoder.decode(datagram, "10.0.0.1")
+        decoder.take_events()
+        decoder.decode(datagram, "10.0.0.1")
         self.assertEqual(decoder.take_events(), [])
 
     def test_nothing_is_printed(self):
@@ -236,6 +256,84 @@ class EventBookkeeping(unittest.TestCase):
             decoder.decode(p.v5_message(sampling_word=(1 << 14) | 100),
                            "10.0.0.1")
         self.assertEqual((out.getvalue(), err.getvalue()), ("", ""))
+
+
+class TemplateEvents(unittest.TestCase):
+    def setUp(self):
+        self.decoder = Decoder()
+
+    def learned(self, datagram, exporter="10.0.0.1"):
+        self.decoder.decode(datagram, exporter)
+        return [e for e in self.decoder.take_events()
+                if isinstance(e, TemplateLearned)]
+
+    def test_a_template_datagram_raises_one(self):
+        events = self.learned(p.ipfix([p.data_template(400, p.FLOW_FIELDS)]))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].template_id, 400)
+        self.assertEqual(events[0].exporter, "10.0.0.1")
+        self.assertIsNone(events[0].previous)
+
+    def test_the_fields_are_the_layout_records_are_read_through(self):
+        events = self.learned(p.ipfix([p.data_template(400, p.FLOW_FIELDS)]))
+        self.assertEqual([name for name, _kind, _len in events[0].fields],
+                         ["src_addr", "dst_addr", "src_port", "dst_port",
+                          "proto", "octets", "packets"])
+
+    def test_a_v9_template_raises_one_too(self):
+        events = self.learned(p.v9([p.v9_data_template(400, p.FLOW_FIELDS)],
+                                   count=1))
+        self.assertEqual([e.template_id for e in events], [400])
+
+    def test_an_options_template_says_so(self):
+        events = self.learned(
+            p.ipfix([p.ipfix_options_template(300, [(145, 4)], [(34, 4)])]))
+        self.assertEqual([e.options for e in events], [True])
+
+    def test_several_templates_in_one_set_each_raise_one(self):
+        events = self.learned(p.ipfix([p.template_set(
+            [(400, p.FLOW_FIELDS), (401, p.FLOW_FIELDS[:3])])]))
+        self.assertEqual([e.template_id for e in events], [400, 401])
+
+    def test_a_redefinition_carries_the_layout_it_replaced(self):
+        self.learned(p.ipfix([p.data_template(400, p.FLOW_FIELDS)]))
+        events = self.learned(
+            p.ipfix([p.data_template(400, p.FLOW_FIELDS[:3])], seq=1))
+        self.assertEqual(len(events), 1)
+        self.assertEqual(len(events[0].previous), len(p.FLOW_FIELDS))
+        self.assertEqual(len(events[0].fields), 3)
+
+    def test_two_exporters_sharing_an_id_are_two_templates(self):
+        datagram = p.ipfix([p.data_template(400, p.FLOW_FIELDS)])
+        self.assertEqual(len(self.learned(datagram, "10.0.0.1")), 1)
+        self.assertEqual(len(self.learned(datagram, "10.0.0.2")), 1)
+
+    def test_v5_raises_none(self):
+        self.assertEqual(self.learned(p.v5_message(count=3)), [])
+
+    def test_a_template_survives_a_datagram_that_then_failed(self):
+        # The set that raised is not the set that taught. A layout learned
+        # from a sound template set is true whatever the rest of the datagram
+        # turned out to be, and it is what every later record is read through,
+        # so the event has to outlive the failure rather than be skipped by it.
+        #
+        # The raise is injected rather than found. parse_v9_or_ipfix is
+        # hardened against every malformed datagram anybody has managed to
+        # build, and tools/fuzz.py exists to keep it that way, so there is no
+        # honest set of bytes that parses one set and then throws.
+        class Exploding(TemplateStore):
+            def get(self, *args):
+                raise RuntimeError("boom")
+
+        self.decoder.templates = Exploding()
+        message = self.decoder.decode(
+            p.ipfix([p.data_template(400, p.FLOW_FIELDS),
+                     p.data_set(400, p.flow_payload())]), "10.0.0.1")
+        events = self.decoder.take_events()
+        self.assertIsNone(message)
+        self.assertEqual([e.template_id for e in events
+                          if isinstance(e, TemplateLearned)], [400])
+        self.assertTrue(any(isinstance(e, DecodeError) for e in events))
 
 
 if __name__ == "__main__":

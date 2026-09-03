@@ -42,7 +42,7 @@ import logging
 
 from .collector import DEFAULT_PORT, DEFAULT_RCVBUF, Collector
 from .decoder import Decoder, Message
-from .events import DecodeError, ExportGap, SamplingChange
+from .events import DecodeError, ExportGap, SamplingChange, TemplateLearned
 from .flow import METADATA_KEYS, MODELLED_FIELDS, Flow
 from .ie import FLOW_END_REASON, IE, PROTO_NAMES, TCP_FLAG_BITS
 from .parse import (
@@ -66,7 +66,7 @@ from .values import (
                     tcp_flags_str,
 )
 
-__version__ = "0.2.1"
+__version__ = "0.3.0"
 
 # A library that logs to an unconfigured root logger prints to stderr, which is
 # exactly what this package exists not to do.
@@ -83,7 +83,7 @@ __all__ = [
     # what the exporter says about itself
     "SamplingWatch", "sampling_rate", "SequenceWatch",
     # events
-    "ExportGap", "SamplingChange", "DecodeError",
+    "ExportGap", "SamplingChange", "TemplateLearned", "DecodeError",
     # field level helpers
     "addr_kind", "ADDR_KINDS", "service_name", "proto_name", "tcp_flags_str",
     "flow_end_reason_name", "IE", "PROTO_NAMES", "FLOW_END_REASON",

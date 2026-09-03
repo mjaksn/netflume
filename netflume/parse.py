@@ -19,15 +19,20 @@ downstream.
 """
 
 import ipaddress
+import logging
 import struct
 import time
-from collections import Counter, OrderedDict
+from collections import Counter, OrderedDict, deque
 from socket import inet_ntoa
 
+from .events import TemplateLearned
 from .ie import IE
 
+log = logging.getLogger(__name__)
+
 __all__ = [
-    "MAX_TEMPLATES", "NTP_EPOCH", "SUPPORTED_VERSIONS", "UNSPECIFIED",
+    "MAX_PENDING_TEMPLATES", "MAX_TEMPLATES", "NTP_EPOCH",
+    "SUPPORTED_VERSIONS", "UNSPECIFIED",
     "TemplateStore", "flow_duration", "flow_endpoints", "flow_timestamp",
     "parse_message", "parse_v5", "parse_v9_or_ipfix",
 ]
@@ -61,6 +66,16 @@ UNSPECIFIED = frozenset((None, 0, "", "0.0.0.0", "::"))
 #: collector sees tens of exporters, each with a handful of domains and
 #: templates.
 MAX_TEMPLATES = 10000
+
+#: How many :class:`~netflume.events.TemplateLearned` events one store holds
+#: before the oldest are dropped, counted in :attr:`TemplateStore.dropped`.
+#: :meth:`Decoder.decode <netflume.decoder.Decoder.decode>` drains the store
+#: on every datagram, so a collector never reaches this. A caller parsing
+#: without one, which :func:`parse_message` supports and the README documents,
+#: may never drain at all, and a template redefined under an ID already in use
+#: raises an event every time: an exporter alternating two layouts for one ID
+#: would otherwise grow this list for the life of the process.
+MAX_PENDING_TEMPLATES = 10000
 
 
 def decode_value(raw, kind):
@@ -119,13 +134,22 @@ class TemplateStore:
     An instance is not thread safe. One decoder, one store; if two threads
     decode, give each its own; templates are scoped per exporter and domain
     anyway, so nothing is shared that matters.
+
+    A template arriving for the first time, or arriving different from the one
+    held under the same ID, raises a
+    :class:`~netflume.events.TemplateLearned` for :meth:`take_events`. This is
+    the only place either fact is known: by the time a caller has the store it
+    holds the new layout and nothing says what it replaced.
     """
 
-    def __init__(self, max_templates=MAX_TEMPLATES):
+    def __init__(self, max_templates=MAX_TEMPLATES,
+                 max_pending=MAX_PENDING_TEMPLATES):
         self.templates = OrderedDict()
         self.learned = 0
         self.evicted = 0
+        self.dropped = 0
         self.max_templates = max_templates
+        self._events = deque(maxlen=max_pending)
 
     def put(self, exporter, domain, tid, fields, options=False):
         """Record a template. Returns True when it is new or has changed."""
@@ -138,8 +162,33 @@ class TemplateStore:
             self.evicted += 1
         if old is None or old[0] != fields:
             self.learned += 1
+            event = TemplateLearned(exporter, domain, tid, fields, options,
+                                    None if old is None else old[0])
+            # A deque with a maxlen drops silently, so the count is taken here
+            # rather than read off a length afterwards: a caller that never
+            # drains needs to be able to tell a quiet stream from a full queue.
+            if len(self._events) == self._events.maxlen:
+                self.dropped += 1
+            self._events.append(event)
+            log.info("%s", event)
             return True
         return False
+
+    def take_events(self):
+        """Hand over the templates learned since the last call, and forget them.
+
+        A list of :class:`~netflume.events.TemplateLearned`. Empty is the
+        normal answer once an exporter has settled, since a template resent
+        unchanged is not learned again.
+
+        :meth:`Decoder.decode <netflume.decoder.Decoder.decode>` calls this
+        for you and folds the result into its own events. A caller driving
+        :func:`parse_message` directly owns the draining, and one that never
+        drains loses the oldest past ``max_pending``.
+        """
+        events = list(self._events)
+        self._events.clear()
+        return events
 
     def get(self, exporter, domain, tid):
         """Returns (fields, is_options), or (None, False) if not learned yet."""
