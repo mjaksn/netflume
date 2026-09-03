@@ -9,6 +9,46 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [0.4.0] - 2026-09-03
+
+### Fixed
+
+- **A template that changes kind is a redefinition, and is now reported as
+  one.** Data and options templates are allocated from one pool of IDs, so an
+  exporter may reuse an ID for the other kind without touching a single field
+  specification. `TemplateStore.put` compared layouts alone, so it took the
+  new kind, returned False, raised no `TemplateLearned` and did not count the
+  change in `stats["templates_new"]`, while every record for that ID
+  afterwards arrived in `message.options` rather than `message.flows`. A
+  caller reading only flows saw the template go silent and was told nothing.
+
+- **A `TemplateLearned` no longer hands out the store's live layout.** The
+  event carried the same list object the store keeps and decodes every later
+  record for that template through, so a consumer that appended to
+  `event.fields` corrupted the decode it had just been told about and made the
+  next resend of that template look like a redefinition. The event now carries
+  its own copy. The triples inside were already immutable, so one level is
+  enough.
+
+### Added
+
+- **`TemplateLearned.was_options`**, the kind held before this template
+  arrived, or None when it is new. `fields` and `options` describe what
+  arrived, `previous` and `was_options` what it replaced, and the pairing is
+  what lets a reader tell a layout that changed from a kind that did.
+  `previous` keeps the meaning it had in 0.3.0, the layout and nothing else,
+  so nothing reading it needs to change.
+
+- **The `netflume.parse` logger** in the README's logging table. It has
+  carried template events at INFO since 0.3.0 and the table did not say so,
+  which left the new log source undiscoverable.
+
+### Documentation
+
+- `Decoder.take_events` still described an empty result as normal on a
+  "healthy" network, which 0.3.0 stopped being true at startup. It now says
+  "settled", as the README already did, and says why.
+
 ## [0.3.0] - 2026-09-03
 
 ### Added
@@ -131,6 +171,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
+[0.4.0]: https://github.com/mjaksn/netflume/releases/tag/v0.4.0
 [0.3.0]: https://github.com/mjaksn/netflume/releases/tag/v0.3.0
 [0.2.1]: https://github.com/mjaksn/netflume/releases/tag/v0.2.1
 [0.1.0]: https://github.com/mjaksn/netflume/releases/tag/v0.1.0

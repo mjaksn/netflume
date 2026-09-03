@@ -82,7 +82,7 @@ next to your code. There are no dependencies to resolve either way.
 
 ```python
 import netflume
-netflume.__version__          # "0.3.0"
+netflume.__version__          # "0.4.0"
 ```
 
 ---
@@ -395,7 +395,7 @@ for event in decoder.take_events():
 | --- | --- | --- |
 | `SamplingChange` | `exporter`, `domain`, `rate`, `previous` | a domain stated, or restated, how much it is leaving out |
 | `ExportGap` | `exporter`, `domain`, `version`, `missed`, `unit` | exports that never arrived |
-| `TemplateLearned` | `exporter`, `domain`, `template_id`, `fields`, `options`, `previous` | a template arrived that this decoder did not already hold under that ID, or held differently. `previous` is the layout it replaced, or None when the template is new |
+| `TemplateLearned` | `exporter`, `domain`, `template_id`, `fields`, `options`, `previous`, `was_options` | a template arrived that this decoder did not already hold under that ID, or held differently. `fields` and `options` are the template that arrived, `previous` and `was_options` the one it replaced, both None when it is new |
 | `DecodeError` | `exporter`, `reason`, `detail` | a datagram that would not decode. `reason` is `"short"`, `"unsupported"` or `"malformed"` |
 
 `take_events()` hands over what has accumulated and forgets it. Empty is the
@@ -409,6 +409,14 @@ receives things that are not NetFlow, and a caller that never drains must not
 accumulate one event per junk datagram for the life of the process. Each class
 has a `__str__` that explains itself in a sentence, and each is also written to
 the log.
+
+Changed means either half of what a template is, the field layout or the
+kind. Both kinds are allocated from one pool of IDs, so an exporter may reuse
+an ID for an options template with a byte-identical layout, and that is a
+redefinition worth reporting even though no field moved: every record for that
+ID afterwards arrives in `message.options` rather than `message.flows`, which a
+caller reading only flows would see as the template going silent. `was_options`
+beside `previous` is what lets the two cases be told apart.
 
 Only new and changed templates raise a `TemplateLearned`, exactly as only
 changed rates raise a `SamplingChange`. Exporters resend every template they
@@ -563,6 +571,7 @@ logging.basicConfig(level=logging.INFO)
 | logger | what |
 | --- | --- |
 | `netflume.collector` | INFO once at bind, DEBUG for a refused `SO_RCVBUF` and for stale ICMP errors |
+| `netflume.parse` | INFO when a template is learned or redefined |
 | `netflume.sampling` | WARNING when a domain starts sampling, INFO when it stops |
 | `netflume.sequence` | WARNING on the first gap for an exporter |
 | `netflume.decoder` | DEBUG per undecodable datagram |

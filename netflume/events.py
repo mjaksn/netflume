@@ -66,7 +66,7 @@ class SamplingChange(namedtuple("SamplingChange",
 
 class TemplateLearned(namedtuple(
         "TemplateLearned",
-        "exporter domain template_id fields options previous")):
+        "exporter domain template_id fields options previous was_options")):
     """A template this store had not seen before, or one that has changed.
 
     exporter     source address of the exporting device
@@ -85,6 +85,13 @@ class TemplateLearned(namedtuple(
                  is the case worth acting on: every record decoded for that
                  ID afterwards means something different from the ones
                  before it.
+    was_options  the kind believed before this, or None when the template is
+                 new. It is a field of its own rather than part of
+                 `previous`, which named the layout in 0.3.0 and goes on
+                 naming it. `options` and `fields` describe the template that
+                 has just arrived; `was_options` and `previous` describe the
+                 one it replaced, and the pairing is what lets a reader tell
+                 a layout that changed from a kind that did.
 
     Only new and changed templates are reported, exactly as only sampling
     changes are. Exporters resend every template they hold every few minutes,
@@ -109,6 +116,17 @@ class TemplateLearned(namedtuple(
         plural = "" if count == 1 else "s"
         if self.previous is None:
             return f"{where} learned {kind} {self.template_id}, {count} field{plural}"
+        # A kind that has flipped is said instead of the field count, and is
+        # the more consequential of the two: the records stop arriving in one
+        # of the decoder's two outputs and start arriving in the other, which
+        # a caller reading only flows sees as the template going silent.
+        if self.was_options is not None and self.was_options != self.options:
+            became = "an options template" if self.options else "a data template"
+            now, before = (("option", "flow") if self.options
+                           else ("flow", "option"))
+            return (f"{where} redefined template {self.template_id} as "
+                    f"{became}, {count} field{plural}; its records are now "
+                    f"{now} records rather than {before} records")
         return (f"{where} redefined {kind} {self.template_id}: {count} "
                 f"field{plural}, was {len(self.previous)}; records decoded "
                 f"for it from here on describe a different layout")
