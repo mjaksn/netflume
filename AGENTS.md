@@ -37,14 +37,24 @@ python tools/fuzz.py --seconds 60
 ```
 
 Only ruff and mypy are external tools, and they are development tools,
-never runtime dependencies. Install them with `pip install ruff mypy` if
-they are missing.
+never runtime dependencies. Install them with the pinned set CI uses:
+
+```bash
+pip install --require-hashes -r .github/requirements/lint.txt
+```
+
+Both files under `.github/requirements/` pin every tool, and every tool of
+a tool, by version and by hash. `--require-hashes` is what makes a
+mismatch fail instead of warn, and it is also why a file lists more names
+than you asked for: pip refuses the whole set if anything it needs is
+missing a hash. Regenerate the files rather than editing them by hand, and
+let the Dependabot pip entry move the versions.
 
 CI also builds and checks the distributions, which needs two more tools
 that are not present by default. To reproduce that job locally:
 
 ```bash
-pip install build twine
+pip install --require-hashes -r .github/requirements/build.txt
 python -m build
 twine check dist/*
 ```

@@ -43,7 +43,10 @@ jobs:
         with:
           python-version: "3.12"
       - name: install the tools
-        run: pip install ruff mypy
+        # Pinned by version and hash. --require-hashes makes a mismatch fail
+        # the job rather than warn, and it also forces every transitive pin to
+        # be present, which is why the file lists more than ruff and mypy.
+        run: pip install --require-hashes -r .github/requirements/lint.txt
       - name: ruff
         run: ruff check .
       - name: mypy
@@ -94,7 +97,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - run: pip install build twine
+      - run: pip install --require-hashes -r .github/requirements/build.txt
       - name: build the distributions
         run: python -m build
       - name: check the metadata
