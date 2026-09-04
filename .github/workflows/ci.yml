@@ -51,8 +51,8 @@ jobs:
         run: ruff check .
       - name: mypy
         # The package ships annotations and a py.typed, so they are part of
-        # what consumers get and are worth checking. Whether 3.9 accepts the
-        # syntax is the test matrix's job, not this one's.
+        # what consumers get and are worth checking. Whether the floor accepts
+        # the syntax is the test matrix's job, not this one's.
         run: mypy netflume
 
   test:
@@ -61,23 +61,12 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ["3.9", "3.10", "3.11", "3.12", "3.13"]
-        exclude:
-          # 3.9 is no longer in the windows runner image's tool cache, so
-          # setup-python spends 39 seconds fetching an interpreter to run a
-          # two-second suite, and `gate` waits for the slowest job, so that
-          # is 39 seconds on the critical path of every merge. Measured on run
-          # 32550546030: 47s for this cell against 15s for 3.13 on the same OS.
-          #
-          # Dropped rather than the whole of 3.9, because the two axes catch
-          # different things. 3.9 catches syntax and stdlib incompatibility,
-          # which is the same on either OS and is still covered on ubuntu.
-          # Windows catches socket, socketpair and selectors behaviour, which
-          # is not version specific and is still covered on four versions. Only
-          # the intersection goes untested, and nothing here is known to differ
-          # there. Put this cell back if that assumption ever fails.
-          - os: windows-latest
-            python: "3.9"
+        # Every cell runs. The exclusion that used to live here existed only
+        # because 3.9 had fallen out of the windows runner's tool cache and
+        # cost 39 seconds of the gate's critical path fetching an interpreter.
+        # The floor is 3.11 now, so the slow cell is gone and the matrix is a
+        # full one again.
+        python: ["3.11", "3.12", "3.13", "3.14"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

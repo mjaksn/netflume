@@ -9,6 +9,29 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [Unreleased]
+
+### Changed
+
+- **Python 3.11 is the floor.** `requires-python` moves from `>=3.9` to
+  `>=3.11`, so 3.9 and 3.10 are no longer supported. 3.9 reached end of life in
+  October 2025 and 3.10 reaches it in October 2026, and holding the floor at a
+  version nobody receives security fixes for costs the package the syntax it
+  could otherwise be written in, for no one's benefit. Nothing is lost to
+  anyone still on those versions: `requires-python` is what makes pip resolve
+  them to 0.4.0, the last release that supports them, rather than fail. The
+  test matrix becomes 3.11
+  through 3.14, on both Ubuntu and Windows with no exclusions, since the cell
+  that used to be excluded was 3.9 on Windows.
+
+- **Annotations are written the modern way.** `Optional[int]` becomes
+  `int | None` and `List[str]` becomes `list[str]`, `datetime.timezone.utc`
+  becomes `datetime.UTC`, and the percent-formatted strings become f-strings.
+  Ruff's pyupgrade rules (`UP`) are on to keep it that way; they were left out
+  only because they asked for exactly the syntax 3.9 could not take. This is a
+  change of spelling and not of behaviour. No public name, signature, record
+  key or default moved, and all 304 tests pass.
+
 ## [0.4.0] - 2026-09-03
 
 ### Fixed
@@ -175,3 +198,4 @@ in this one depends on.
 [0.3.0]: https://github.com/mjaksn/netflume/releases/tag/v0.3.0
 [0.2.1]: https://github.com/mjaksn/netflume/releases/tag/v0.2.1
 [0.1.0]: https://github.com/mjaksn/netflume/releases/tag/v0.1.0
+[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.4.0...HEAD

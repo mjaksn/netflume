@@ -11,8 +11,9 @@ live collector would.
 import logging
 import struct
 from collections import Counter, deque
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Mapping
+from typing import Any
 
 from .events import DecodeError
 from .flow import Flow
@@ -48,11 +49,11 @@ class Message:
     #: records rather than discarding it.
     header: Mapping[str, Any]
     #: Flow records, as plain dicts of normalised keys.
-    flows: List[Dict[str, Any]] = field(default_factory=list)
+    flows: list[dict[str, Any]] = field(default_factory=list)
     #: Option records: what the exporter says about itself, not about traffic.
     #: Sampling rates are read out of these automatically; interface names and
     #: the like are left for the caller to use or ignore.
-    options: List[Dict[str, Any]] = field(default_factory=list)
+    options: list[dict[str, Any]] = field(default_factory=list)
     #: Exports the sequence counter says never arrived before this message. 0
     #: is the normal answer, and is also the answer while the stream is still
     #: being learned. See :class:`~netflume.sequence.SequenceWatch`.

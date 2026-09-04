@@ -34,9 +34,10 @@ record deliberately does not.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any, Mapping, Optional
+from datetime import UTC, datetime
+from typing import Any
 
 from .parse import flow_duration, flow_endpoints, flow_timestamp
 from .values import addr_kind, proto_name, service_name, tcp_flags_str
@@ -79,27 +80,27 @@ class Flow:
     # == identity, always known =============================================
     exporter: str
     version: int
-    domain: Optional[int]
+    domain: int | None
     #: Flow start as unix epoch seconds. Best effort and never None: with
     #: nothing better to go on this is the message's export time. See
     #: :func:`~netflume.parse.flow_timestamp`.
     start: float
 
     # == everything the exporter may simply not have sent ====================
-    src_addr: Optional[str] = None
-    dst_addr: Optional[str] = None
-    src_port: Optional[int] = None
-    dst_port: Optional[int] = None
-    proto: Optional[int] = None
-    octets: Optional[int] = None
-    packets: Optional[int] = None
-    tcp_flags: Optional[int] = None
-    in_if: Optional[int] = None
-    out_if: Optional[int] = None
+    src_addr: str | None = None
+    dst_addr: str | None = None
+    src_port: int | None = None
+    dst_port: int | None = None
+    proto: int | None = None
+    octets: int | None = None
+    packets: int | None = None
+    tcp_flags: int | None = None
+    in_if: int | None = None
+    out_if: int | None = None
     #: Seconds, or None when the exporter sent no usable start/end pair. None
     #: does not mean instantaneous; exclude such flows from rate arithmetic
     #: rather than dividing by zero or by a guess.
-    duration: Optional[float] = None
+    duration: float | None = None
     #: 1-in-N as last advertised by this exporter, or 1 when it has said
     #: nothing. The counts above are a sample of this size.
     sampling_rate: int = 1
@@ -204,7 +205,7 @@ class Flow:
 
     def started_at(self):
         """:attr:`start` as a timezone-aware UTC datetime."""
-        return datetime.fromtimestamp(self.start, timezone.utc)
+        return datetime.fromtimestamp(self.start, UTC)
 
     def scaled(self, value):
         """`value` corrected for the exporter's sampling rate, or None.

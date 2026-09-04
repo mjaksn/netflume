@@ -6,7 +6,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://github.com/mjaksn/netflume/blob/main/LICENSE)
 
 NetFlow v5, NetFlow v9 and IPFIX collection and parsing, as a library. Standard
-library only, no dependencies, Python 3.9 and up.
+library only, no dependencies, Python 3.11 and up.
 
 ```python
 from netflume import Collector
@@ -781,7 +781,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-273 tests, no dependencies, about a second. Several use `subTest`, so the
+304 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in

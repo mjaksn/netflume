@@ -363,7 +363,7 @@ class NothingGrowsWithoutBound(unittest.TestCase):
     def test_the_template_store_evicts_the_least_recently_used(self):
         store = TemplateStore(max_templates=4)
         for i in range(20):
-            store.put("10.0.0.%d" % i, 0, 300, [("src_addr", "ipv4", 4)])
+            store.put(f"10.0.0.{i}", 0, 300, [("src_addr", "ipv4", 4)])
         self.assertEqual(len(store.templates), 4)
         self.assertEqual(store.evicted, 16)
 
@@ -371,7 +371,7 @@ class NothingGrowsWithoutBound(unittest.TestCase):
         store = TemplateStore(max_templates=4)
         store.put("10.0.0.1", 0, 300, [("src_addr", "ipv4", 4)])
         for i in range(20):
-            store.put("192.0.2.%d" % i, 0, 300, [("dst_addr", "ipv4", 4)])
+            store.put(f"192.0.2.{i}", 0, 300, [("dst_addr", "ipv4", 4)])
             store.get("10.0.0.1", 0, 300)      # reading counts as use
         fields, _ = store.get("10.0.0.1", 0, 300)
         self.assertEqual(fields, [("src_addr", "ipv4", 4)])
@@ -379,7 +379,7 @@ class NothingGrowsWithoutBound(unittest.TestCase):
     def test_sequence_streams_are_capped(self):
         watch = SequenceWatch(max_streams=4)
         for i in range(20):
-            watch.observe("10.0.0.%d" % i, 0, 10, 1, 5)
+            watch.observe(f"10.0.0.{i}", 0, 10, 1, 5)
         self.assertEqual(len(watch.streams), 4)
         self.assertEqual(watch.evicted, 16)
 
@@ -392,7 +392,7 @@ class NothingGrowsWithoutBound(unittest.TestCase):
         watch.missed[key] = 99
         watch.units[key] = "data records"
         for i in range(10):
-            watch.observe("192.0.2.%d" % i, 0, 10, 1, 5)
+            watch.observe(f"192.0.2.{i}", 0, 10, 1, 5)
         self.assertNotIn(key, watch.streams)
         self.assertNotIn(key, watch.missed)
         self.assertNotIn(key, watch.units)
@@ -400,14 +400,14 @@ class NothingGrowsWithoutBound(unittest.TestCase):
     def test_the_warned_table_is_capped(self):
         watch = SequenceWatch(max_streams=3)
         for i in range(20):
-            watch._warned["10.0.0.%d" % i] = True
-            watch.observe("10.0.0.%d" % i, 0, 10, 1, 5)
+            watch._warned[f"10.0.0.{i}"] = True
+            watch.observe(f"10.0.0.{i}", 0, 10, 1, 5)
         self.assertLessEqual(len(watch._warned), 3)
 
     def test_sampling_rates_are_capped(self):
         watch = SamplingWatch(max_streams=4)
         for i in range(20):
-            watch.note("10.0.0.%d" % i, 0, {"sampling_interval": 100})
+            watch.note(f"10.0.0.{i}", 0, {"sampling_interval": 100})
         self.assertEqual(len(watch.rates), 4)
         self.assertEqual(watch.evicted, 16)
 
