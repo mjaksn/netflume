@@ -1,12 +1,30 @@
 version: 2
 
-# Actions only. The package itself has no dependencies and is not going to
-# acquire any, so there is nothing else here for Dependabot to watch.
+# Actions, and the development tools CI installs. The package itself still
+# has no dependencies and is not going to acquire any, so nothing here
+# watches the package: `dependencies = []` is a design decision, not an
+# oversight waiting to be corrected.
+#
+# The pip entry exists because a pin that nobody refreshes is worse than no
+# pin at all. It goes stale, it stops receiving security fixes, and it does
+# so silently. Pinning and watching are one decision, not two.
 updates:
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
       interval: monthly
+    cooldown:
+      default-days: 7
+    commit-message:
+      prefix: "ci"
+    open-pull-requests-limit: 3
+
+  - package-ecosystem: pip
+    directory: "/.github/requirements"
+    schedule:
+      interval: monthly
+    # Matches the actions entry above, and the reason is the same: a release
+    # published minutes ago has had no time to be found wanting.
     cooldown:
       default-days: 7
     commit-message:

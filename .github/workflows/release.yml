@@ -47,7 +47,7 @@ jobs:
       - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
         with:
           python-version: "3.12"
-      - run: pip install build twine
+      - run: pip install --require-hashes -r .github/requirements/build.txt
       - run: python -m build
       - run: twine check dist/*
       - name: the tag and the version must agree
