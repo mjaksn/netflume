@@ -13,6 +13,11 @@ venv/
 # A lock file for a package with no dependencies pins nothing.
 uv.lock
 
+# What a local bench run leaves behind. The baseline it is compared against,
+# tools/bench-baseline.json, is committed on purpose and is not this.
+bench-result.json
+bench-output.txt
+
 # Agent tooling scratch. A worktree is a checkout of this repository living
 # inside it, which git would otherwise try to record as a nested repo, and
 # settings.local.json is per-user. A shared .claude/settings.json is

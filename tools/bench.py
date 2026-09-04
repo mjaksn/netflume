@@ -293,8 +293,18 @@ def main():
 
     baseline = None
     if args.baseline:
-        with open(args.baseline, encoding="utf-8") as fh:
-            baseline = json.load(fh)
+        # Read before timing rather than after. A missing or malformed
+        # baseline is a typo nine times out of ten, and finding it after
+        # several seconds of measuring is a waste of both.
+        try:
+            with open(args.baseline, encoding="utf-8") as fh:
+                baseline = json.load(fh)
+        except OSError as exc:
+            raise SystemExit(f"cannot read baseline {args.baseline}: "
+                             f"{exc.strerror}") from None
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"baseline {args.baseline} is not valid JSON: "
+                             f"{exc}") from None
 
     results = run(cases, args.repeat)
     payload = {

@@ -1,0 +1,88 @@
+name: Bench
+
+# On demand and after a merge, exactly like Fuzz, and deliberately NOT part of
+# the merge gate. `gate` requires the lint, test and build jobs in ci.yml and
+# nothing here, which is structural rather than a matter of configuration: this
+# is a separate workflow and nothing in ci.yml can depend on it.
+#
+# The reason is the one AGENTS.md already gives for keeping fuzzing out of the
+# gate. Shared runners share a host, so throughput here moves several percent
+# from one run to the next for reasons that have nothing to do with the code. A
+# hard threshold on a figure that noisy fails for a novel reason often enough
+# that people learn to click past it, and a required check nobody reads is
+# worse than no check at all. This one reports. Read the number; do not let it
+# block you.
+on:
+  workflow_dispatch:
+    inputs:
+      repeat:
+        description: timed runs per case, medianed
+        default: "7"
+        required: false
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: bench-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    name: parse throughput
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7
+        with:
+          # The same interpreter the baseline is taken on. bench.py compares
+          # the two environments and says so when they differ, and a warning
+          # on every single run would be noise rather than information.
+          python-version: "3.12"
+
+      - name: measure the parse path
+        # More repeats than the tool's own default, because the median is only
+        # as steady as the number of runs behind it and a shared runner needs
+        # the extra ones. No dependency to install: the harness is standard
+        # library only, which is what makes this job cheap enough to run on
+        # every merge.
+        run: |
+          # Without this the exit status of the pipeline below is tee's, which
+          # is always 0, so a harness that refused to run would be reported as
+          # a passing job with a traceback nobody opened the log to see.
+          set -o pipefail
+          repeat="${{ github.event.inputs.repeat || '7' }}"
+          if [ -f tools/bench-baseline.json ]; then
+            python tools/bench.py --repeat "$repeat" \
+              --baseline tools/bench-baseline.json \
+              --save bench-result.json | tee bench-output.txt
+          else
+            # The first run on a runner is how the committed baseline gets
+            # made: there is nothing to compare against until one exists, and
+            # a baseline taken on somebody's laptop would make every run here
+            # report the difference between two machines.
+            echo "no tools/bench-baseline.json yet, so this run has nothing"
+            echo "to compare against. Download bench-result below and commit"
+            echo "it as tools/bench-baseline.json to start the series."
+            echo
+            python tools/bench.py --repeat "$repeat" \
+              --save bench-result.json | tee bench-output.txt
+          fi
+
+      - name: put the table in the run summary
+        # So the numbers are on the run's front page rather than buried in a
+        # log that has to be opened and scrolled.
+        run: |
+          {
+            echo '```'
+            cat bench-output.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bench-result
+          path: bench-result.json
+          if-no-files-found: error
