@@ -512,7 +512,7 @@ def parse_message(data, exporter, store=None, stats=None):
             raise ValueError("v9 and IPFIX need a TemplateStore that outlives "
                              "the datagram")
         return parse_v9_or_ipfix(data, exporter, store, stats)
-    raise ValueError("unsupported export version %d" % version)
+    raise ValueError(f"unsupported export version {version}")
 
 
 def flow_endpoints(rec):

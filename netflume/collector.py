@@ -198,8 +198,7 @@ class Collector:
         attached, and the original dict still on ``flow.raw``.
         """
         for message in self.messages():
-            for flow in message.typed_flows(now=now):
-                yield flow
+            yield from message.typed_flows(now=now)
 
     # == shutting down =======================================================
 

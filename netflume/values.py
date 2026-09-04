@@ -9,7 +9,6 @@ presentation, and presentation belongs to whatever is doing the presenting.
 
 import ipaddress
 import socket
-from typing import Dict, Optional, Tuple
 
 from .ie import FLOW_END_REASON, PROTO_NAMES, TCP_FLAG_BITS
 
@@ -31,7 +30,7 @@ EPHEMERAL_FLOOR = 49152
 #: this without bound in any consumer that touches Flow.service.
 MAX_SERVICE_CACHE = 100000
 
-_service_cache: Dict[Tuple[Optional[int], Optional[int]], Optional[str]] = {}
+_service_cache: dict[tuple[int | None, int | None], str | None] = {}
 
 
 def service_name(port, proto):
@@ -70,7 +69,7 @@ def service_name(port, proto):
     return name
 
 
-_addr_kind_cache: Dict[str, str] = {}
+_addr_kind_cache: dict[str, str] = {}
 ADDR_KINDS = ("private", "public", "multicast", "special", "unknown")
 
 

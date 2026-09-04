@@ -7,7 +7,7 @@ name = "netflume"
 version = "0.4.0"
 description = "NetFlow v5, NetFlow v9 and IPFIX collection and parsing as a Python library. Standard library only, no dependencies"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.11"
 license = "MIT"
 license-files = ["LICENSE"]
 authors = [{ name = "mjaksn" }]
@@ -19,11 +19,10 @@ classifiers = [
     "Operating System :: OS Independent",
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3 :: Only",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
     "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
     "Topic :: System :: Networking :: Monitoring",
     "Typing :: Typed",
 ]
@@ -51,13 +50,13 @@ netflume = ["py.typed"]
 
 [tool.ruff]
 line-length = 88
-target-version = "py39"
+target-version = "py311"
 
 [tool.ruff.lint]
-# Correctness and tidiness, not modernisation. The pyupgrade rules would ask
-# for `X | None` and builtin generics, which read better but which this
-# package cannot use in anger while it supports 3.9.
-select = ["E", "F", "W", "I", "B"]
+# UP is on since the floor moved to 3.11. It was left out while 3.9 was
+# supported because it asks for exactly the syntax that floor could not take,
+# `X | None` and builtin generics, and there is no longer a reason to refuse.
+select = ["E", "F", "W", "I", "B", "UP"]
 
 [tool.mypy]
 files = ["netflume"]

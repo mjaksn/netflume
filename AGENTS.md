@@ -30,7 +30,7 @@ public surface moves.
 All four run from the repository root and need no fixture or service.
 
 ```bash
-python -m unittest discover      # 273 tests, about a second
+python -m unittest discover      # 304 tests, about a second
 python -m ruff check .
 python -m mypy netflume
 python tools/fuzz.py --seconds 60
@@ -71,12 +71,13 @@ never be the reason a security update is blocked. The tests are standard
 library only for the same reason. Do not add a runtime or test
 dependency; solve it with the standard library or leave it out.
 
-**Python 3.9 is the floor.** `requires-python = ">=3.9"` and ruff targets
-`py39`. So no `X | None`, no builtin generics such as `list[int]` in
-annotations, and nothing else added after 3.9. Use `typing.Optional`,
-`typing.List` and friends, as the existing modules do. The ruff lint
-selection is `E, F, W, I, B` on purpose: the pyupgrade rules are left out
-because they would ask for exactly the syntax 3.9 cannot take.
+**Python 3.11 is the floor.** `requires-python = ">=3.11"` and ruff
+targets `py311`. So `X | None` and builtin generics such as `list[int]`
+are the house style in annotations, not `typing.Optional` and
+`typing.List`, and anything the standard library gained up to 3.11 is
+available. The ruff lint selection is `E, F, W, I, B, UP`: the pyupgrade
+rules are on, and they are what keeps the modern spelling from drifting
+back.
 
 **`Decoder.decode` never raises.** Whatever arrives on the socket was
 chosen by whoever can reach it, and a decoder that dies on one bad packet
@@ -153,9 +154,10 @@ and never the gate: its checks attach to the commit but do not enter the
 pull request's status rollup, and the rollup is what the ruleset
 evaluates.
 
-The test matrix is Python 3.9 through 3.13 on Ubuntu and Windows, minus
-the 3.9 on Windows cell, which was dropped because fetching that
-interpreter cost more than the suite it ran. Fuzzing runs after a merge
+The test matrix is Python 3.11 through 3.14 on Ubuntu and Windows, with
+no exclusions. It carried one for a while, the 3.9 on Windows cell,
+because fetching that interpreter cost more than the suite it ran, and
+raising the floor removed the reason for it. Fuzzing runs after a merge
 and on demand, deliberately not as part of the gate: it is exploratory,
 and a required check that fails for a novel reason is one people learn to
 click past.

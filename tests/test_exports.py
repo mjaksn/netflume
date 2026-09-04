@@ -46,7 +46,7 @@ NAMES = {m.group(0) for span in _CODE
 
 #: The module-qualified references, which are how the README spells a name
 #: that a module exports and the package deliberately does not.
-PATHS = {"netflume.%s.%s" % pair for span in _CODE
+PATHS = {f"netflume.{pair[0]}.{pair[1]}" for span in _CODE
          for pair in re.findall(r"\bnetflume\.([a-z_]+)\.([A-Za-z_][A-Za-z0-9_]*)",
                                 span)}
 
@@ -56,8 +56,8 @@ class EveryExportIsDocumented(unittest.TestCase):
         for name in netflume.__all__:
             with self.subTest(name=name):
                 self.assertIn(name, NAMES,
-                              "netflume.%s is exported but the README never "
-                              "writes it" % name)
+                              f"netflume.{name} is exported but the README "
+                              "never writes it")
 
     def test_the_readme_mentions_every_module_only_export(self):
         # A name a module exports and the package does not is reachable only
@@ -69,10 +69,10 @@ class EveryExportIsDocumented(unittest.TestCase):
                 if name in netflume.__all__:
                     continue
                 with self.subTest(module=mod, name=name):
-                    self.assertIn("netflume.%s.%s" % (mod, name), PATHS,
-                                  "netflume.%s exports %s, which the package "
-                                  "does not re-export, so the README must "
-                                  "name it with its module path" % (mod, name))
+                    self.assertIn(f"netflume.{mod}.{name}", PATHS,
+                                  f"netflume.{mod} exports {name}, which the "
+                                  "package does not re-export, so the README "
+                                  "must name it with its module path")
 
 
 class EveryDocumentedNameIsExported(unittest.TestCase):
@@ -84,7 +84,7 @@ class EveryDocumentedNameIsExported(unittest.TestCase):
             with self.subTest(path=path):
                 module = importlib.import_module("netflume." + mod)
                 self.assertTrue(hasattr(module, name),
-                                "%s is documented but does not exist" % path)
+                                f"{path} is documented but does not exist")
 
     def test_module_paths_are_exported(self):
         for path in sorted(PATHS):
@@ -92,8 +92,8 @@ class EveryDocumentedNameIsExported(unittest.TestCase):
             with self.subTest(path=path):
                 module = importlib.import_module("netflume." + mod)
                 self.assertIn(name, module.__all__,
-                              "%s is documented as public but is missing from "
-                              "netflume.%s.__all__" % (path, mod))
+                              f"{path} is documented as public but is missing "
+                              f"from netflume.{mod}.__all__")
 
 
 class EveryModuleDeclaresItsSurface(unittest.TestCase):
@@ -116,8 +116,8 @@ class EveryModuleDeclaresItsSurface(unittest.TestCase):
                 continue
             with self.subTest(name=name):
                 self.assertIn(name, declared,
-                              "the package exports %s, but no module declares "
-                              "it" % name)
+                              f"the package exports {name}, but no module "
+                              "declares it")
 
 
 if __name__ == "__main__":
