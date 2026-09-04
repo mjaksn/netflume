@@ -17,6 +17,7 @@ netflume/      the package (parse, decoder, collector, flow, events,
 tests/         unittest suite, plus tests/packets.py which assembles
                synthetic datagrams byte by byte
 tools/fuzz.py  adversarial check that Decoder.decode never raises
+tools/bench.py throughput of the parse path, for judging a change
 .github/       CI, fuzz and release workflows
 ```
 
@@ -71,6 +72,22 @@ python -m unittest discover -v
 The fuzzer defaults to ten seconds and a random seed, prints the seed it
 chose, and reproduces a reported failure with `--seed N`. It exits
 non-zero and prints a hex reproducer if a datagram makes `decode` raise.
+
+`tools/bench.py` is not a check and never fails a build. It measures the
+parse path so that a performance claim becomes a number:
+
+```bash
+python tools/bench.py                       # every case
+python tools/bench.py --save bench.json     # write a baseline
+python tools/bench.py --baseline bench.json # print the delta
+```
+
+Treat a single run as approximate. Run to run spread on a normal desktop
+is several percent either way, which is why the numbers are a median and
+why the bench workflow is deliberately outside the gate: a threshold on a
+figure that moves that much becomes a check people learn to click past.
+Compare against a baseline taken on the same machine and interpreter, and
+the harness says so when the one you passed was not.
 
 ## Constraints that must not be broken
 
