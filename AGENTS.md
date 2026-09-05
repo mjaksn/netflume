@@ -89,11 +89,13 @@ figure that moves that much becomes a check people learn to click past.
 Compare against a baseline taken on the same machine and interpreter, and
 the harness says so when the one you passed was not.
 
-`tools/bench-baseline.json` is the committed series, and it is taken on a
-runner rather than on anybody's desk, which is the only way the workflow's
-percentages mean anything. Replace it from the `bench-result` artifact of
-a Bench run when the numbers should move, and say in the pull request why
-they moved.
+The workflow compares against `tools/bench-baseline.json` when that file
+exists, and says it has nothing to compare against when it does not. The
+baseline is taken on a runner rather than on anybody's desk, which is the
+only way the workflow's percentages mean anything: the first Bench run on
+`main` produces it, and committing the `bench-result` artifact of that run
+under that name starts the series. Replace it the same way when the
+numbers should move, and say in the pull request why they moved.
 
 ## Constraints that must not be broken
 
