@@ -1,0 +1,67 @@
+{
+  "cases": {
+    "flow-from-record": {
+      "records_per_datagram": 24,
+      "records_per_second": 245454.76229151306,
+      "seconds_per_call": 9.777769140000032e-05,
+      "unit": "flows"
+    },
+    "ipfix-narrow": {
+      "datagrams_per_second": 14147.08573952531,
+      "records_per_datagram": 24,
+      "records_per_second": 339530.0577486074,
+      "seconds_per_call": 7.068593619999888e-05,
+      "unit": "flows"
+    },
+    "ipfix-options": {
+      "datagrams_per_second": 20801.26359189377,
+      "records_per_datagram": 24,
+      "records_per_second": 499230.32620545046,
+      "seconds_per_call": 4.807400260000065e-05,
+      "unit": "option records"
+    },
+    "ipfix-varlen": {
+      "datagrams_per_second": 12658.434228649094,
+      "records_per_datagram": 24,
+      "records_per_second": 303802.42148757825,
+      "seconds_per_call": 7.899871200000064e-05,
+      "unit": "flows"
+    },
+    "ipfix-wide": {
+      "datagrams_per_second": 6572.431105657386,
+      "records_per_datagram": 24,
+      "records_per_second": 157738.34653577727,
+      "seconds_per_call": 0.0001521507010000036,
+      "unit": "flows"
+    },
+    "v5": {
+      "datagrams_per_second": 26573.183765141028,
+      "records_per_datagram": 24,
+      "records_per_second": 637756.4103633846,
+      "seconds_per_call": 3.763192279999998e-05,
+      "unit": "flows"
+    },
+    "v9-narrow": {
+      "datagrams_per_second": 14360.809337531196,
+      "records_per_datagram": 24,
+      "records_per_second": 344659.4241007487,
+      "seconds_per_call": 6.963395840000147e-05,
+      "unit": "flows"
+    },
+    "v9-wide": {
+      "datagrams_per_second": 6722.74181808207,
+      "records_per_datagram": 24,
+      "records_per_second": 161345.80363396966,
+      "seconds_per_call": 0.0001487488329999991,
+      "unit": "flows"
+    }
+  },
+  "environment": {
+    "implementation": "CPython",
+    "machine": "x86_64",
+    "netflume": "0.4.0",
+    "python": "3.12.14",
+    "system": "Linux"
+  },
+  "repeat": 7
+}
