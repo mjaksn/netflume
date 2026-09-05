@@ -18,7 +18,7 @@ tests/         unittest suite, plus tests/packets.py which assembles
                synthetic datagrams byte by byte
 tools/fuzz.py  adversarial check that Decoder.decode never raises
 tools/bench.py throughput of the parse path, for judging a change
-.github/       CI, fuzz and release workflows
+.github/       CI, fuzz, bench and release workflows
 ```
 
 `README.md` is the API reference and it is long; it documents the public
@@ -88,6 +88,14 @@ why the bench workflow is deliberately outside the gate: a threshold on a
 figure that moves that much becomes a check people learn to click past.
 Compare against a baseline taken on the same machine and interpreter, and
 the harness says so when the one you passed was not.
+
+The workflow compares against `tools/bench-baseline.json` when that file
+exists, and says it has nothing to compare against when it does not. The
+baseline is taken on a runner rather than on anybody's desk, which is the
+only way the workflow's percentages mean anything: the first Bench run on
+`main` produces it, and committing the `bench-result` artifact of that run
+under that name starts the series. Replace it the same way when the
+numbers should move, and say in the pull request why they moved.
 
 ## Constraints that must not be broken
 
@@ -184,10 +192,13 @@ evaluates.
 The test matrix is Python 3.11 through 3.14 on Ubuntu and Windows, with
 no exclusions. It carried one for a while, the 3.9 on Windows cell,
 because fetching that interpreter cost more than the suite it ran, and
-raising the floor removed the reason for it. Fuzzing runs after a merge
-and on demand, deliberately not as part of the gate: it is exploratory,
-and a required check that fails for a novel reason is one people learn to
-click past.
+raising the floor removed the reason for it. Fuzzing and benchmarking both run
+after a merge and on demand, and deliberately not as part of the gate.
+Fuzzing is exploratory, and a required check that fails for a novel reason
+is one people learn to click past. The bench is the same argument arriving
+by a different road: shared runners move throughput by several percent
+between runs, so a threshold on it would become that check within a month.
+Both report. Neither blocks.
 
 Releases are tag driven. The workflow refuses to publish unless the tag,
 the version in `pyproject.toml` and `netflume.__version__` all agree, so
