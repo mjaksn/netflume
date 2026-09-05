@@ -66,6 +66,14 @@ VARLEN_FIELDS = p.FLOW_FIELDS + [(82, 0xFFFF)]
 OPTION_SCOPE = [(145, 4)]
 OPTION_FIELDS = [(34, 4), (35, 4), (36, 4), (37, 4)]
 
+#: The recorded environment key naming what was measured rather than where.
+#: Every other key describes a machine or an interpreter, and throughput is
+#: only comparable within those. This one is the version of the code under
+#: test, so it is meant to differ between a baseline and the run being judged
+#: against it: that difference is the comparison the baseline exists to make,
+#: and warning about it would fire on every run after a version bump.
+VERSION_KEY = "netflume"
+
 
 def payload_for(fields, seed=0):
     """One record's worth of bytes for a template of `fields`.
@@ -196,13 +204,17 @@ def measure(fn, repeat):
 
 
 def environment():
-    """What a number is only comparable within."""
+    """Where a number was taken, and what version produced it.
+
+    Only the first four keys bear on whether two numbers can be compared. See
+    VERSION_KEY for why the last is recorded but not compared.
+    """
     return {
         "python": platform.python_version(),
         "implementation": platform.python_implementation(),
         "system": platform.system(),
         "machine": platform.machine(),
-        "netflume": netflume.__version__,
+        VERSION_KEY: netflume.__version__,
     }
 
 
@@ -256,9 +268,12 @@ def compare_environments(now, was):
     """Say so when a baseline was taken somewhere else.
 
     Throughput is not portable between machines or interpreters, and a delta
-    across two of them is a measurement of the difference between them.
+    across two of them is a measurement of the difference between them. A
+    moved VERSION_KEY is not that and is skipped, or the warning would land
+    on every run once the version is bumped past the baseline's.
     """
-    drift = [k for k, v in was.items() if now.get(k) != v]
+    drift = [k for k, v in was.items()
+             if k != VERSION_KEY and now.get(k) != v]
     if drift:
         detail = ", ".join(f"{k}: {was[k]} then, {now.get(k)} now"
                            for k in drift)

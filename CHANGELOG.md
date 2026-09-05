@@ -30,7 +30,7 @@ reachable from `netflume.__all__` plus the module-level names listed under
   Ruff's pyupgrade rules (`UP`) are on to keep it that way; they were left out
   only because they asked for exactly the syntax 3.9 could not take. This is a
   change of spelling and not of behaviour. No public name, signature, record
-  key or default moved, and all 304 tests pass.
+  key or default moved, and the suite passes unchanged.
 
 ## [0.4.0] - 2026-09-03
 
