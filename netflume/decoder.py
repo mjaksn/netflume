@@ -8,6 +8,7 @@ holding bytes from a pcap, a queue or a test fixture gets the same answers a
 live collector would.
 """
 
+import ipaddress
 import logging
 import struct
 from collections import Counter, deque
@@ -33,6 +34,32 @@ log = logging.getLogger(__name__)
 #: counted in ``stats["events_dropped"]`` so that the loss is visible rather
 #: than silent.
 MAX_PENDING_EVENTS = 10000
+
+
+def _exporter_key(addr):
+    """One spelling per exporter, whatever socket family it arrived on.
+
+    A dual-stack socket reports an IPv4 sender as ``::ffff:192.0.2.1``, and
+    this package renders the same address as ``::ffff:c0a8:10a`` when it comes
+    out of a record. Templates, sequence streams and sampling rates are every
+    one of them keyed by this string, so two spellings of one router split
+    three tables: the templates it already sent are invisible under the other
+    key, and every flow is undecodable until it resends, which is a minute or
+    ten away. Fold the mapped forms back to the dotted quad so there is one
+    key per device no matter which family the collector is listening on.
+
+    Anything that is not an IPv4-mapped IPv6 address is returned untouched,
+    including a value that is not an address at all: a caller may pass
+    whatever identifies a source to it, and this is not the place to start
+    refusing input.
+    """
+    if not isinstance(addr, str) or ":" not in addr:
+        return addr             # a dotted quad, or a name, or not an address
+    try:
+        mapped = ipaddress.IPv6Address(addr).ipv4_mapped
+    except ValueError:
+        return addr
+    return addr if mapped is None else str(mapped)
 
 
 @dataclass
@@ -135,7 +162,12 @@ class Decoder:
         What those datagrams taught is in :meth:`take_events` as
         :class:`~netflume.events.TemplateLearned`, whether or not this returns
         a Message.
+
+        `exporter` is normalised here, which is the one place every caller
+        reaches: an IPv4 sender arriving over a dual-stack socket is keyed by
+        its dotted quad rather than by the mapped form the socket reported.
         """
+        exporter = _exporter_key(exporter)
         self.stats["packets"] += 1
         self.stats["bytes_rx"] += len(data)
 
