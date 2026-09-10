@@ -267,8 +267,9 @@ list.
 RFC 7011 §6.1.9 and §6.1.10 define `dateTimeMicroseconds` and
 `dateTimeNanoseconds` as 64-bit **NTP** timestamps: seconds since 1900 in the
 high word, and a fraction in units of 1/2³² in the low one. They are not counts
-since the UNIX epoch. `dateTimeSeconds` and `dateTimeMilliseconds` (IE 150 to
-153) *are* plain epoch counts, so only two of the four pairs are affected.
+since the UNIX epoch. `dateTimeSeconds` and `dateTimeMilliseconds` *are* plain
+epoch counts wherever they appear, IE 150 to 153 among the flow timestamps and
+IE 160 and 323 elsewhere, so only two of the four pairs are affected.
 
 netflume converts them at decode time, so `flow_start_us` holds **UNIX seconds
 as a float**, the same currency `flow_timestamp` deals in. The key name

@@ -200,9 +200,11 @@ class ParseIPFIX(unittest.TestCase):
         # IANA-registered, so arriving as ie<id> was a gap in this table
         # rather than a vendor field.
         fields = [(256, 2), (209, 4), (149, 4), (163, 8), (160, 8)]
-        payload = bytes.fromhex("0800") + bytes.fromhex("00000002") \
-            + bytes.fromhex("00000000") + bytes.fromhex("0000000000000064") \
-            + struct.pack("!Q", 1789049048645)
+        payload = (bytes.fromhex("0800")
+                   + bytes.fromhex("00000002")
+                   + bytes.fromhex("00000000")
+                   + bytes.fromhex("0000000000000064")
+                   + struct.pack("!Q", 1789049048645))
         msg = p.ipfix([p.data_template(900, fields), p.data_set(900, payload)])
         _, records, _ = self.parse(msg)
         self.assertEqual(records[0], {"ethertype": 0x0800, "tcp_options": 2,
