@@ -75,6 +75,7 @@ IE = {
     139: ("icmp_type_code_v6", "uint"),
     145: ("template_id", "uint"),
     148: ("flow_id", "uint"),
+    149: ("observation_domain_id", "uint"),
     150: ("flow_start_s", "uint"),
     151: ("flow_end_s", "uint"),
     152: ("flow_start_ms", "uint"),
@@ -90,10 +91,18 @@ IE = {
     155: ("flow_end_us", "ntp"),
     156: ("flow_start_ns", "ntp"),
     157: ("flow_end_ns", "ntp"),
+    160: ("system_init_time_ms", "uint"),
+    163: ("observed_flows", "uint"),
     176: ("icmp_type", "uint"),
     177: ("icmp_code", "uint"),
     178: ("icmp_type", "uint"),
     179: ("icmp_code", "uint"),
+    # IANA is normative here, not RFC 5102, whose diagram was wrong (Errata
+    # 1739): the registry records unsigned64 with flags semantics, not an octet
+    # array. Option kind X is bit X counting from the least significant, so a
+    # big-endian int is lossless however few octets an exporter reduces it to.
+    # Deprecated in favour of IE 520, but 209 is what ipt_NETFLOW sends.
+    209: ("tcp_options", "uint"),
     225: ("post_nat_src_addr", "ipv4"),
     226: ("post_nat_dst_addr", "ipv4"),
     227: ("post_nat_src_port", "uint"),
@@ -103,6 +112,8 @@ IE = {
     243: ("dot1q_vlan", "uint"),
     244: ("dot1q_prio", "uint"),
     245: ("dot1q_cust_vlan", "uint"),
+    256: ("ethertype", "uint"),
+    300: ("observation_domain_name", "string"),
     302: ("selector_id", "uint"),
     304: ("selector_algorithm", "uint"),
     305: ("sampling_packet_interval", "uint"),

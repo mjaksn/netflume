@@ -102,8 +102,9 @@ def decode_value(raw, kind):
             # 1900 in the high word, a fraction in units of 1/2**32 in the low
             # one, and NOT counts since the UNIX epoch. Divide the raw word by
             # 1e6 and the flow lands in the year 540,000 with a duration 4295x
-            # too long. dateTimeSeconds and dateTimeMilliseconds (IE 150-153)
-            # really are plain epoch counts and are left alone.
+            # too long. dateTimeSeconds and dateTimeMilliseconds really are
+            # plain epoch counts and are left alone, whether they carry a flow
+            # timestamp (IE 150 to 153) or something else (IE 160, IE 323).
             word = int.from_bytes(raw, "big")
             if word == 0:
                 return 0        # an unset field, not midnight in 1900

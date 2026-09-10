@@ -257,7 +257,7 @@ nothing.
 | `src_as`, `dst_as` | IE 16, 17 | AS numbers |
 | `next_hop` | IE 15, 62 | address string |
 | `post_nat_src_addr`, `post_nat_dst_addr` | IE 225, 226 | **may be the only addresses present** |
-| `tos`, `vlan`, `src_mac`, `dst_mac`, `if_name`, … | | see `netflume/ie.py` for the full table |
+| `tos`, `vlan`, `src_mac`, `dst_mac`, `if_name`, `ethertype`, `tcp_options`, … | | see `netflume/ie.py` for the full table |
 
 `netflume.IE` is that table, `{element id: (name, kind)}`, and it is the whole
 list.
@@ -267,8 +267,9 @@ list.
 RFC 7011 §6.1.9 and §6.1.10 define `dateTimeMicroseconds` and
 `dateTimeNanoseconds` as 64-bit **NTP** timestamps: seconds since 1900 in the
 high word, and a fraction in units of 1/2³² in the low one. They are not counts
-since the UNIX epoch. `dateTimeSeconds` and `dateTimeMilliseconds` (IE 150 to
-153) *are* plain epoch counts, so only two of the four pairs are affected.
+since the UNIX epoch. `dateTimeSeconds` and `dateTimeMilliseconds` *are* plain
+epoch counts wherever they appear, IE 150 to 153 among the flow timestamps and
+IE 160 and 323 elsewhere, so only two of the four pairs are affected.
 
 netflume converts them at decode time, so `flow_start_us` holds **UNIX seconds
 as a float**, the same currency `flow_timestamp` deals in. The key name
@@ -781,7 +782,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-315 tests, no dependencies, about a second. Several use `subTest`, so the
+317 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
