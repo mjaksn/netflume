@@ -9,7 +9,7 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
-## [Unreleased]
+## [0.5.1] - 2026-09-10
 
 ### Added
 
@@ -207,7 +207,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
-[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.5.0...HEAD
+[0.5.1]: https://github.com/mjaksn/netflume/releases/tag/v0.5.1
 [0.5.0]: https://github.com/mjaksn/netflume/releases/tag/v0.5.0
 [0.4.0]: https://github.com/mjaksn/netflume/releases/tag/v0.4.0
 [0.3.0]: https://github.com/mjaksn/netflume/releases/tag/v0.3.0
