@@ -194,6 +194,33 @@ class ParseIPFIX(unittest.TestCase):
         _, records, _ = self.parse(msg)
         self.assertEqual(records[0], {"ie9999": 42})
 
+    def test_elements_an_ipt_netflow_exporter_sends_are_named(self):
+        # These five, and IE 300 below, turned up unrecognised in a live
+        # capture from a UDM Pro, which exports through ipt_NETFLOW. All are
+        # IANA-registered, so arriving as ie<id> was a gap in this table
+        # rather than a vendor field.
+        fields = [(256, 2), (209, 4), (149, 4), (163, 8), (160, 8)]
+        payload = bytes.fromhex("0800") + bytes.fromhex("00000002") \
+            + bytes.fromhex("00000000") + bytes.fromhex("0000000000000064") \
+            + struct.pack("!Q", 1789049048645)
+        msg = p.ipfix([p.data_template(900, fields), p.data_set(900, payload)])
+        _, records, _ = self.parse(msg)
+        self.assertEqual(records[0], {"ethertype": 0x0800, "tcp_options": 2,
+                                      "observation_domain_id": 0,
+                                      "observed_flows": 100,
+                                      "system_init_time_ms": 1789049048645})
+
+    def test_the_observation_domain_name_is_a_string_not_a_hex_blob(self):
+        # IE 300 is registered as a string. Over eight bytes it fell through
+        # to the hex fallback, which is how an exporter's own name reached a
+        # caller as unreadable digits.
+        text = b"ipt_NETFLOW 2.6-dirty" + bytes(1)
+        msg = p.ipfix([p.data_template(901, [(300, len(text))]),
+                       p.data_set(901, text)])
+        _, records, _ = self.parse(msg)
+        self.assertEqual(records[0],
+                         {"observation_domain_name": "ipt_NETFLOW 2.6-dirty"})
+
     def test_enterprise_elements_are_kept_and_namespaced(self):
         spec = p.enterprise_spec(33, 4, 9) + struct.pack("!HH", 4, 1)
         msg = p.ipfix([p.data_template_raw(700, 2, spec),

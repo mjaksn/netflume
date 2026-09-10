@@ -257,7 +257,7 @@ nothing.
 | `src_as`, `dst_as` | IE 16, 17 | AS numbers |
 | `next_hop` | IE 15, 62 | address string |
 | `post_nat_src_addr`, `post_nat_dst_addr` | IE 225, 226 | **may be the only addresses present** |
-| `tos`, `vlan`, `src_mac`, `dst_mac`, `if_name`, … | | see `netflume/ie.py` for the full table |
+| `tos`, `vlan`, `src_mac`, `dst_mac`, `if_name`, `ethertype`, `tcp_options`, … | | see `netflume/ie.py` for the full table |
 
 `netflume.IE` is that table, `{element id: (name, kind)}`, and it is the whole
 list.
@@ -781,7 +781,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-315 tests, no dependencies, about a second. Several use `subTest`, so the
+317 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in

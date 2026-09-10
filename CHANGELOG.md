@@ -9,6 +9,19 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [Unreleased]
+
+### Added
+
+- **Six more information elements are named.** IE 149 `observation_domain_id`,
+  160 `system_init_time_ms`, 163 `observed_flows`, 209 `tcp_options`, 256
+  `ethertype` and 300 `observation_domain_name` join the `IE` table. All are
+  IANA-registered and all six are sent by `ipt_NETFLOW`, which is what a
+  UDM Pro exports through, so they were reaching callers as `ie149` and
+  friends. IE 300 is the one that was actually unreadable: it is a string, and
+  an unrecognised field over eight bytes falls back to hex, so an exporter
+  naming itself arrived as a blob of digits instead of as its name.
+
 ## [0.5.0] - 2026-09-05
 
 ### Changed
@@ -194,6 +207,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
+[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.5.0...HEAD
 [0.5.0]: https://github.com/mjaksn/netflume/releases/tag/v0.5.0
 [0.4.0]: https://github.com/mjaksn/netflume/releases/tag/v0.4.0
 [0.3.0]: https://github.com/mjaksn/netflume/releases/tag/v0.3.0
