@@ -561,12 +561,8 @@ def flow_timestamp(rec, hdr, now=None):
     return base or now
 
 
-def flow_duration(rec, hdr=None):
-    """How long the flow lasted, in seconds, or None if it cannot be told.
-
-    `hdr` is accepted and ignored. It is here because the duration once needed
-    it and callers pass it.
-    """
+def flow_duration(rec):
+    """How long the flow lasted, in seconds, or None if it cannot be told."""
     # As in flow_timestamp: the us and ns pairs arrive already in seconds.
     pairs = [("flow_start_ms", "flow_end_ms", 1000.0),
              ("flow_start_s", "flow_end_s", 1.0),
