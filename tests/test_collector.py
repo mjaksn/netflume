@@ -241,5 +241,84 @@ class SharedState(CollectorTestCase):
         self.assertEqual(events[0].reason, "unsupported")
 
 
+class DualStack(unittest.TestCase):
+    """One socket serving both families, with one key per exporter.
+
+    The default bind is every interface on both families, so an IPv4 exporter
+    arrives over the v6 socket in its mapped spelling and has to reach the
+    tables as a dotted quad. Skipped rather than failed on a machine with no
+    IPv6, which is a property of the host and not of this code.
+    """
+
+    def setUp(self):
+        collector = Collector(port=0, timeout=0.25)
+        self.addCleanup(collector.close)
+        if collector.socket.family != socket.AF_INET6:
+            self.skipTest("no dual-stack socket on this machine")
+        self.collector = collector
+        self.port = collector.address[1]
+
+    def send_from(self, family, host, data=None):
+        """Send one datagram from `host` and return what the collector made."""
+        sender = socket.socket(family, socket.SOCK_DGRAM)
+        self.addCleanup(sender.close)
+        try:
+            sender.sendto(p.v5(1) if data is None else data, (host, self.port))
+        except OSError as exc:                  # no loopback for that family
+            self.skipTest(f"cannot send from {host}: {exc}")
+        message = self.collector.poll(timeout=5.0)
+        self.assertIsNotNone(message, f"nothing arrived from {host}")
+        return message
+
+    def test_an_ipv4_exporter_reaches_the_dual_stack_socket(self):
+        message = self.send_from(socket.AF_INET, "127.0.0.1")
+        self.assertEqual(message.header["exporter"], "127.0.0.1")
+
+    def test_an_ipv6_exporter_reaches_it_too(self):
+        message = self.send_from(socket.AF_INET6, "::1")
+        self.assertEqual(message.header["exporter"], "::1")
+
+    def test_both_families_are_decoded_by_the_one_decoder(self):
+        self.send_from(socket.AF_INET, "127.0.0.1")
+        self.send_from(socket.AF_INET6, "::1")
+        self.assertEqual(self.collector.stats["packets"], 2)
+        self.assertEqual(self.collector.stats["v5_msgs"], 2)
+
+    def test_an_ipv4_exporters_templates_are_keyed_by_its_dotted_quad(self):
+        # The socket reports ::ffff:127.0.0.1 for this sender. The template
+        # store must not, or the exporter is invisible to itself after the
+        # collector is restarted onto an IPv4 socket.
+        self.send_from(socket.AF_INET, "127.0.0.1",
+                       p.ipfix([p.data_template(400, p.TIMED_FLOW_FIELDS)]))
+        keys = {key[0] for key in self.collector.decoder.templates.templates}
+        self.assertEqual(keys, {"127.0.0.1"})
+
+
+class BindChoosesTheFamily(unittest.TestCase):
+    """What `bind` is decides which socket gets made."""
+
+    def family_for(self, **kwargs):
+        with Collector(port=0, timeout=0.25, **kwargs) as collector:
+            return collector.socket.family
+
+    def test_the_default_is_dual_stack_where_the_machine_allows_it(self):
+        family = self.family_for()
+        if family == socket.AF_INET:
+            self.skipTest("no IPv6 on this machine, so the fallback took it")
+        self.assertEqual(family, socket.AF_INET6)
+
+    def test_the_ipv4_wildcard_still_means_ipv4_alone(self):
+        self.assertEqual(self.family_for(bind="0.0.0.0"), socket.AF_INET)
+
+    def test_a_named_ipv4_address_is_ipv4(self):
+        self.assertEqual(self.family_for(bind="127.0.0.1"), socket.AF_INET)
+
+    def test_an_ipv6_literal_is_ipv6(self):
+        try:
+            self.assertEqual(self.family_for(bind="::1"), socket.AF_INET6)
+        except OSError as exc:
+            self.skipTest(f"no IPv6 loopback to bind: {exc}")
+
+
 if __name__ == "__main__":
     unittest.main()

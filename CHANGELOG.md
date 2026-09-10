@@ -9,6 +9,37 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [Unreleased]
+
+### Changed
+
+- **The collector listens on both address families by default.** `bind` moves
+  from `"0.0.0.0"` to `None`, which is every interface on both families over
+  one `AF_INET6` socket with `IPV6_V6ONLY` cleared. An exporter reaching the
+  collector over IPv6 is now decodable at all, which it was not before, and
+  clearing that option is what makes the same socket still receive from IPv4
+  exporters. Windows and several BSDs default it on, so it is load-bearing
+  rather than tidying.
+
+  Migration is passing `bind="0.0.0.0"` to keep the IPv4-only socket. A
+  machine with no IPv6 falls back to IPv4 and says so at INFO, so a collector
+  that started before still starts. A *named* IPv6 address does not fall
+  back: binding `0.0.0.0` when the caller asked for `::1` would listen
+  somewhere they never asked for, which is worth an exception rather than a
+  log line. `Collector.address` follows the socket family and so is a 4-tuple
+  on the dual-stack socket; the port is `address[1]` either way.
+
+- **An exporter has one key whatever family it reaches you on.** A dual-stack
+  socket reports an IPv4 sender as `::ffff:192.0.2.1`, and the templates, the
+  sequence stream and the sampling rate are every one of them keyed by that
+  string. The same router would key two ways, and the templates it had
+  already sent would sit under a key nothing looks up again, leaving its
+  flows undecodable until it resent them minutes later. `Decoder.decode` now
+  folds the IPv4-mapped spellings back to the dotted quad. It is the one
+  place every caller passes through, so this also settles
+  `header["exporter"]` for anyone handing a mapped address to the parsing
+  layer directly.
+
 ## [0.5.2] - 2026-09-10
 
 ### Changed
@@ -217,6 +248,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
+[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.5.2...HEAD
 [0.5.2]: https://github.com/mjaksn/netflume/releases/tag/v0.5.2
 [0.5.1]: https://github.com/mjaksn/netflume/releases/tag/v0.5.1
 [0.5.0]: https://github.com/mjaksn/netflume/releases/tag/v0.5.0

@@ -102,7 +102,7 @@ skip to [Parsing without a socket](#parsing-without-a-socket).
 ## Collector
 
 ```python
-Collector(port=2055, bind="0.0.0.0", decoder=None, timeout=1.0,
+Collector(port=2055, bind=None, decoder=None, timeout=1.0,
           rcvbuf=4*1024*1024, reuse_address=True, sock=None)
 ```
 
@@ -111,7 +111,7 @@ The socket is bound in the constructor, so a port already in use raises
 
 | | |
 | --- | --- |
-| `port`, `bind` | where to listen. Name an interface if only one faces the exporters. |
+| `port`, `bind` | where to listen. `bind=None`, the default, is every interface on **both address families**, over one dual-stack socket. `"0.0.0.0"` is every IPv4 interface and nothing else, `"::"` is the explicit spelling of the default, and a named address picks its own family. Name an interface if only one faces the exporters. |
 | `decoder` | an existing [`Decoder`](#decoder-and-message), to share template state or turn tracking off. |
 | `timeout` | how long the blocking reads inside iteration wait before coming up for air. Bounds how quickly `stop()` is noticed; it is not a deadline on receiving. |
 | `rcvbuf` | kernel receive buffer to request. None leaves the system default. |
@@ -782,7 +782,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-317 tests, no dependencies, about a second. Several use `subTest`, so the
+330 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
@@ -822,8 +822,6 @@ agreement with any particular vendor's interpretation.
 
 - **No sFlow.** Different protocol, different wire format. It arrives on the
   same port often enough that `unsupported_version` is worth watching.
-- **No IPv6 transport.** The socket is `AF_INET`. IPv6 addresses *inside* flow
-  records decode fine; the exporter has to reach you over IPv4. On the roadmap.
 - **Single-threaded receive.** One `Collector`, one socket, one reader. Under
   heavy load, move the socket read into its own thread feeding a bounded queue,
   and watch `missed_exports`, which is how you find out you needed to.
@@ -901,11 +899,6 @@ three headings are the three things this package optimises for.
 
 ### Versatility
 
-- **Collection over IPv6.** An `AF_INET6` socket with `IPV6_V6ONLY` cleared,
-  so exporters reaching the collector over IPv6 are decodable at all. This is
-  about the *transport*; IPv6 addresses inside flow records already decode, and
-  a template carrying both families is handled under
-  [Common keys](#common-keys).
 - **An asyncio interface.** `async for flow in collector` for daemons already
   built around an event loop, without the thread-and-queue adapter every such
   caller currently writes.

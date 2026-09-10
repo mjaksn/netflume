@@ -15,6 +15,7 @@ otherwise have to say arrives as an event from
 """
 
 import errno
+import ipaddress
 import logging
 import selectors
 import socket
@@ -41,6 +42,69 @@ DEFAULT_RCVBUF = 4 * 1024 * 1024
 MAX_DATAGRAM = 65535
 
 
+def _open_socket(bind, port, reuse_address, rcvbuf):
+    """Bind a UDP socket, preferring one that serves both address families.
+
+    `bind` of None means every interface on both families: an ``AF_INET6``
+    socket with ``IPV6_V6ONLY`` cleared, which is what makes one socket
+    receive from IPv4 exporters as well. Windows and several BSDs default
+    that option on, so clearing it is what the dual stack depends on rather
+    than a tidying-up.
+
+    A named address picks its own family, so "0.0.0.0" still gives an
+    IPv4-only socket and "::" or an IPv6 literal gives a v6 one. A hostname
+    is bound over IPv4, which is what this did before there was a choice.
+
+    The wildcard falls back to IPv4 if the platform has no IPv6 at all, since
+    a collector that will not start is worse than one that serves half the
+    network. A *named* v6 address does not fall back: quietly binding
+    0.0.0.0 when the caller asked for ::1 would listen somewhere they did not
+    ask for, and that is worth an exception rather than a log line.
+    """
+    family = socket.AF_INET
+    host = bind
+    dual = False
+    if bind is None:
+        family, host, dual = socket.AF_INET6, "::", True
+    else:
+        try:
+            if ipaddress.ip_address(bind).version == 6:
+                family, dual = socket.AF_INET6, True
+        except ValueError:
+            pass                # a hostname: IPv4, as before
+
+    sock = None
+    if family == socket.AF_INET6:
+        try:
+            sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+            if dual:
+                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        except (OSError, AttributeError) as exc:
+            if sock is not None:
+                sock.close()
+            if bind is not None:
+                raise
+            log.info("no dual-stack socket available (%s); "
+                     "listening on IPv4 only", exc)
+            sock, family, host = None, socket.AF_INET, "0.0.0.0"
+    if sock is None:
+        sock = socket.socket(family, socket.SOCK_DGRAM)
+
+    if reuse_address:
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    if rcvbuf:
+        try:
+            sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
+        except OSError as exc:
+            log.debug("could not set SO_RCVBUF to %d: %s", rcvbuf, exc)
+    try:
+        sock.bind((host, port))
+    except OSError:
+        sock.close()
+        raise
+    return sock
+
+
 class Collector:
     """A bound UDP socket that yields decoded NetFlow.
 
@@ -60,12 +124,15 @@ class Collector:
     :meth:`stop` from a signal handler or another thread.
     """
 
-    def __init__(self, port=DEFAULT_PORT, bind="0.0.0.0", decoder=None,
+    def __init__(self, port=DEFAULT_PORT, bind=None, decoder=None,
                  timeout=1.0, rcvbuf=DEFAULT_RCVBUF, reuse_address=True,
                  sock=None):
         """Bind and get ready to receive.
 
-        port, bind    where to listen. "0.0.0.0" is every IPv4 interface; name
+        port, bind    where to listen. bind=None, the default, is every
+                      interface on both address families, over a dual-stack
+                      socket. "0.0.0.0" is every IPv4 interface and nothing
+                      else; "::" is the explicit spelling of the default. Name
                       one interface if the machine is multi-homed and only one
                       of them faces the exporters.
         decoder       an existing Decoder, if you want to share template state
@@ -92,19 +159,7 @@ class Collector:
         self._stopping = False
 
         if sock is None:
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            if reuse_address:
-                sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-            if rcvbuf:
-                try:
-                    sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
-                except OSError as exc:
-                    log.debug("could not set SO_RCVBUF to %d: %s", rcvbuf, exc)
-            try:
-                sock.bind((bind, port))
-            except OSError:
-                sock.close()
-                raise
+            sock = _open_socket(bind, port, reuse_address, rcvbuf)
         self.socket = sock
         self.socket.setblocking(False)
 
@@ -123,7 +178,13 @@ class Collector:
 
     @property
     def address(self):
-        """The (host, port) actually bound, which matters when port was 0."""
+        """Whatever the socket is actually bound to, which matters when
+        port was 0.
+
+        ``getsockname()``, so the shape follows the family: (host, port) on
+        IPv4 and (host, port, flowinfo, scope_id) on the dual-stack socket
+        that is now the default. The port is ``address[1]`` either way.
+        """
         return self.socket.getsockname()
 
     @property
