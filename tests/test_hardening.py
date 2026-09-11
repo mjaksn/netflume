@@ -25,6 +25,7 @@ from netflume.parse import (
     decode_value,
     flow_duration,
     flow_timestamp,
+    parse_v5,
     parse_v9_or_ipfix,
 )
 
@@ -514,6 +515,61 @@ class OneExporterOneKey(unittest.TestCase):
         # datagram.
         keys = self.template_keys("not an address:", "")
         self.assertEqual({key[0] for key in keys}, {"not an address:", ""})
+
+
+class TruncationIsCounted(unittest.TestCase):
+    """A datagram that arrives short is decoded as far as it goes, and says so.
+
+    None of these raises or should: the records that did arrive are real. But
+    returning fewer flows than the header declared, with nothing to show for
+    it, is a quiet undercount, and a caller totalling bytes has no way to tell
+    it happened.
+    """
+
+    def decode(self, data):
+        decoder = Decoder()
+        message = decoder.decode(data, "10.0.0.1")
+        return message, decoder.stats
+
+    def test_a_v5_datagram_short_of_its_record_count(self):
+        # Three declared, two whole records present, the third cut off.
+        message, stats = self.decode(p.v5_message(count=3)[:-10])
+        self.assertEqual(len(message.flows), 2)
+        self.assertEqual(stats["truncated"], 1)
+
+    def test_an_ipfix_message_declaring_more_than_arrived(self):
+        msg = p.ipfix([p.data_template(400, p.FLOW_FIELDS)])
+        _, stats = self.decode(p.ipfix([p.data_template(400, p.FLOW_FIELDS)],
+                                       msg_len=len(msg) + 40))
+        self.assertEqual(stats["truncated"], 1)
+
+    def test_a_v9_set_running_off_the_end_of_the_datagram(self):
+        # v9 carries no message length, so the set length is the only thing
+        # that can say a datagram arrived short.
+        _, stats = self.decode(p.v9([p.data_set(400, p.flow_payload())])[:-4])
+        self.assertEqual(stats["truncated"], 1)
+
+    def test_one_datagram_counts_once_however_short_it_is(self):
+        # Declared longer than it is and cut mid-set: one short datagram.
+        msg = p.ipfix([p.data_set(400, p.flow_payload())])
+        _, stats = self.decode(
+            p.ipfix([p.data_set(400, p.flow_payload())],
+                    msg_len=len(msg) + 40)[:-4])
+        self.assertEqual(stats["truncated"], 1)
+
+    def test_complete_datagrams_count_nothing(self):
+        for data in (p.v5_message(count=3),
+                     p.v9([p.data_set(400, p.flow_payload())]),
+                     p.ipfix([p.data_template(400, p.FLOW_FIELDS),
+                              p.data_set(400, p.flow_payload())])):
+            with self.subTest(version=struct.unpack_from("!H", data)[0]):
+                _, stats = self.decode(data)
+                self.assertNotIn("truncated", stats)
+
+    def test_the_parsing_layer_counts_it_without_a_decoder(self):
+        stats = Counter()
+        parse_v5(p.v5_message(count=3)[:-10], "10.0.0.1", stats)
+        self.assertEqual(stats["truncated"], 1)
 
 
 if __name__ == "__main__":

@@ -225,12 +225,16 @@ V9_HDR = struct.Struct("!HHIIII")
 IPFIX_HDR = struct.Struct("!HHIII")
 
 
-def parse_v5(data, exporter):
+def parse_v5(data, exporter, stats=None):
     """Returns (header, flow records, option records).
 
     v5 has no options templates; the sampling rate rides in the header instead.
     It is reported as a one-element option record so that callers have a single
     shape to handle across all three versions.
+
+    `stats`, as for :func:`parse_v9_or_ipfix`, is an optional mapping. The one
+    key counted here is ``truncated``, for a datagram that ends before the
+    records its header declared. The records that did arrive are returned.
     """
     if len(data) < V5_HDR.size:
         return None, [], []
@@ -276,6 +280,10 @@ def parse_v5(data, exporter):
             "src_as": src_as, "dst_as": dst_as,
             "src_mask": src_mask, "dst_mask": dst_mask,
         })
+    if len(records) < count and stats is not None:
+        # Fewer flows than the header promised, with nothing else to say so.
+        # Not a decode failure: what arrived is real and is returned.
+        stats["truncated"] += 1
     return hdr, records, options
 
 
@@ -369,9 +377,11 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
     before its template cannot be decoded at all.
 
     `stats` is an optional mapping, for which a ``collections.Counter`` is the
-    obvious choice, into which two keys are counted: ``templates_new`` for each
-    template learned or changed, and ``deferred`` for each data set dropped
-    because its template has not been seen yet. Pass None to discard them.
+    obvious choice, into which three keys are counted: ``templates_new`` for
+    each template learned or changed, ``deferred`` for each data set dropped
+    because its template has not been seen yet, and ``truncated``, once per
+    message, for one that ends before something it declared. Pass None to
+    discard them.
     """
     if stats is None:
         stats = Counter()
@@ -390,6 +400,9 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
         }
         off = IPFIX_HDR.size
         msg_end = min(msg_len, len(data)) if msg_len else len(data)
+        # A message declaring more than the datagram carries is cut short to
+        # what arrived, which is right, but it must not be cut short silently.
+        truncated = msg_len > len(data)
         tmpl_set, opt_set = 2, 3
     else:
         if len(data) < V9_HDR.size:
@@ -401,6 +414,7 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
         }
         off = V9_HDR.size
         msg_end = len(data)
+        truncated = False
         tmpl_set, opt_set = 0, 1
 
     records = []
@@ -410,6 +424,10 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
         set_id, set_len = struct.unpack_from("!HH", data, off)
         if set_len < 4:
             break
+        if off + set_len > msg_end:
+            # v9 has no message length, so a set running off the end of the
+            # datagram is the only sign that one arrived short.
+            truncated = True
         set_end = min(off + set_len, msg_end)
         body = off + 4
         off = set_end
@@ -490,6 +508,8 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
                 body = new_body
                 sink.append(rec)
 
+    if truncated:
+        stats["truncated"] += 1
     return hdr, records, options
 
 
@@ -507,7 +527,7 @@ def parse_message(data, exporter, store=None, stats=None):
         return None, [], []
     version = struct.unpack_from("!H", data, 0)[0]
     if version == 5:
-        return parse_v5(data, exporter)
+        return parse_v5(data, exporter, stats)
     if version in (9, 10):
         if store is None:
             raise ValueError("v9 and IPFIX need a TemplateStore that outlives "

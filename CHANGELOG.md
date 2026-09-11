@@ -59,6 +59,29 @@ reachable from `netflume.__all__` plus the module-level names listed under
   hold then. Additive, with a default of None, so nothing changes for a
   caller who does not pass it.
 
+- **A datagram that arrives short is counted in `stats["truncated"]`.**
+  Three cases were decoded as far as they went and reported as nothing: a v5
+  datagram ending before the record count its header declared, an IPFIX
+  message declaring a length the datagram does not carry, and a v9 or IPFIX
+  set whose length runs past the end. The records that did arrive are still
+  returned, so none of these is a `DecodeError`; but fewer flows than the
+  exporter sent, with no trace, is an undercount a caller totalling bytes
+  cannot see. Counted once per datagram. The set case is the only signal v9
+  has, since a v9 header carries no message length. `parse_v5` gains the
+  optional `stats` argument `parse_v9_or_ipfix` already took, so the parsing
+  layer counts it too.
+
+### Fixed
+
+- **Flows from one datagram are dated against one reading of the clock.**
+  `Message.typed_flows()`, and so `Collector.flows()` and
+  `Decoder.flows(typed=True)`, passed no `now` down, so `flow_timestamp` read
+  the clock afresh for every v5 and v9 flow. Flows that arrived together
+  could straddle a tick and be judged against different moments by the
+  uptime-wrap guard, which near its threshold could give one flow a
+  reconstructed start and the next the export-time fallback. The clock is now
+  read once per message. A `now` passed in is still used as given.
+
 ## [0.5.2] - 2026-09-10
 
 ### Changed

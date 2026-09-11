@@ -11,6 +11,7 @@ live collector would.
 import ipaddress
 import logging
 import struct
+import time
 from collections import Counter, deque
 from collections.abc import Mapping
 from dataclasses import dataclass, field
@@ -105,7 +106,15 @@ class Message:
 
         Built on demand, not up front: a consumer that wants two fields out of
         a dict should not pay to construct thirty.
+
+        The clock is read once for the message when `now` is not given, and
+        every flow is judged against that one reading. They arrived in one
+        datagram, so reading it once per flow was both a call per record and a
+        way for flows from the same export to straddle a tick and be dated
+        against different moments.
         """
+        if now is None and self.flows:
+            now = time.time()
         return [Flow.from_record(rec, self.header, self.sampling_rate, now=now)
                 for rec in self.flows]
 
@@ -184,7 +193,7 @@ class Decoder:
 
         try:
             if version == 5:
-                hdr, records, opts = parse_v5(data, exporter)
+                hdr, records, opts = parse_v5(data, exporter, self.stats)
             else:
                 hdr, records, opts = parse_v9_or_ipfix(
                     data, exporter, self.templates, self.stats)

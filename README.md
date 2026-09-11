@@ -517,6 +517,7 @@ zero.
 | `v5_msgs`, `v9_msgs`, `v10_msgs` | messages per version |
 | `events_dropped` | events discarded because the queue was full, see [Events](#events) |
 | `rejected` | datagrams turned away by the collector's `accept` filter, and so not counted in `packets` |
+| `truncated` | datagrams that ended before something their header declared: a v5 record count, an IPFIX message length, or a set length. What did arrive is still decoded, so this is an undercount warning rather than a failure |
 
 `deferred` climbing at the start is normal and not a fault: v9 and IPFIX
 exporters resend templates periodically, often every few minutes, and data
@@ -640,7 +641,9 @@ know which you have.
 
 The store must persist across datagrams. Exporters resend templates only
 periodically, and a data set arriving before its template cannot be decoded at
-all, which is what `deferred` counts.
+all, which is what `deferred` counts. Pass a `collections.Counter` as `stats`
+to any of the three and it gets the counts a `Decoder` would keep:
+`templates_new`, `deferred` and `truncated`.
 
 Also exported, for a caller working with the records directly: `flow_endpoints`,
 `flow_timestamp`, `flow_duration`.
@@ -792,7 +795,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-342 tests, no dependencies, about a second. Several use `subTest`, so the
+351 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
