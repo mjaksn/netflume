@@ -496,6 +496,18 @@ class OneExporterOneKey(unittest.TestCase):
         keys = self.template_keys("2001:db8::1", self.DOTTED)
         self.assertEqual({key[0] for key in keys}, {"2001:db8::1", self.DOTTED})
 
+    def test_a_sampling_rate_is_found_under_either_spelling(self):
+        # The rate is filed under the dotted quad whichever spelling the
+        # decode was given, so the lookup has to fold the same way or a
+        # caller asking with the spelling it decoded with is told 1.
+        decoder = Decoder()
+        decoder.decode(
+            p.ipfix([p.ipfix_options_template(300, [(145, 4)], [(34, 4)]),
+                     p.data_set(300, struct.pack("!II", 999, 1000))]),
+            self.MAPPED)
+        self.assertEqual(decoder.sampling_rate(self.MAPPED), 1000)
+        self.assertEqual(decoder.sampling_rate(self.DOTTED), 1000)
+
     def test_something_that_is_not_an_address_is_left_alone(self):
         # decode never raises, and a caller may key by whatever identifies a
         # source to it. Refusing input here would be a new way to lose a

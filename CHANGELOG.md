@@ -35,10 +35,11 @@ reachable from `netflume.__all__` plus the module-level names listed under
   string. The same router would key two ways, and the templates it had
   already sent would sit under a key nothing looks up again, leaving its
   flows undecodable until it resent them minutes later. `Decoder.decode` now
-  folds the IPv4-mapped spellings back to the dotted quad. It is the one
-  place every caller passes through, so this also settles
-  `header["exporter"]` for anyone handing a mapped address to the parsing
-  layer directly.
+  folds the IPv4-mapped spellings back to the dotted quad, and
+  `Decoder.sampling_rate` does the same so a lookup finds what a decode
+  stored. That also changes `header["exporter"]` for a caller handing a
+  mapped address to `Decoder.decode` itself. The parsing functions
+  underneath are unchanged and key by whatever they are given.
 
 ## [0.5.2] - 2026-09-10
 

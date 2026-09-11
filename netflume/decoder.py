@@ -163,9 +163,11 @@ class Decoder:
         :class:`~netflume.events.TemplateLearned`, whether or not this returns
         a Message.
 
-        `exporter` is normalised here, which is the one place every caller
-        reaches: an IPv4 sender arriving over a dual-stack socket is keyed by
-        its dotted quad rather than by the mapped form the socket reported.
+        `exporter` is normalised before anything is keyed by it, so an IPv4
+        sender arriving over a dual-stack socket is filed under its dotted quad
+        rather than the mapped form the socket reported. :meth:`sampling_rate`
+        normalises the same way, so a caller can ask with the spelling it
+        decoded with.
         """
         exporter = _exporter_key(exporter)
         self.stats["packets"] += 1
@@ -268,8 +270,14 @@ class Decoder:
         Rates are scoped to an observation domain, so name one. Omitting it
         answers for the exporter as a whole, and only when its domains agree.
         See :meth:`~netflume.sampling.SamplingWatch.rate_for`.
+
+        `exporter` is normalised as :meth:`decode` normalises it. A lookup has
+        to use the key the decode filed the rate under, or asking with the
+        same mapped spelling a caller decoded with would answer 1.
         """
-        return self.sampling.rate_for(exporter, domain) if self.sampling else 1
+        if self.sampling is None:
+            return 1
+        return self.sampling.rate_for(_exporter_key(exporter), domain)
 
     def export_gaps(self):
         """Cumulative loss per stream, as ExportGap records, worst first."""
