@@ -9,7 +9,24 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
-## [Unreleased]
+## [0.6.0] - 2026-09-10
+
+### Migrating from 0.5
+
+This is the release the 0.x plan set aside for breaking changes, so every one
+a caller has to act on is listed here, including the one that went out early.
+
+- **`Collector` listens on both address families by default.** Pass
+  `bind="0.0.0.0"` to keep the IPv4-only socket. `Collector.address` is a
+  4-tuple on the dual-stack socket, and the port is `address[1]` either way.
+- **`flow_duration` takes one argument.** Delete the second. This shipped
+  ahead of the rest in 0.5.2 and is repeated here for anyone moving straight
+  from 0.5.0 or 0.5.1.
+- **An IPv4-mapped exporter address is reported as its dotted quad.** Only a
+  caller that passed `::ffff:` addresses to `Decoder.decode` and relied on
+  getting that spelling back in `header["exporter"]` will notice.
+
+Everything else below is additive or a fix.
 
 ### Changed
 
@@ -290,7 +307,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
-[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.5.2...HEAD
+[0.6.0]: https://github.com/mjaksn/netflume/releases/tag/v0.6.0
 [0.5.2]: https://github.com/mjaksn/netflume/releases/tag/v0.5.2
 [0.5.1]: https://github.com/mjaksn/netflume/releases/tag/v0.5.1
 [0.5.0]: https://github.com/mjaksn/netflume/releases/tag/v0.5.0
