@@ -5,13 +5,16 @@ kernel picks, and a second socket sends it synthetic exports. That exercises
 the timeout and non-blocking paths for real, which a fake socket cannot.
 """
 
+import errno
 import socket
 import struct
 import threading
 import time
 import unittest
+from unittest import mock
 
 from netflume import Collector, Decoder, Flow
+from netflume.collector import _open_socket
 
 from . import packets as p
 
@@ -318,6 +321,50 @@ class BindChoosesTheFamily(unittest.TestCase):
             self.assertEqual(self.family_for(bind="::1"), socket.AF_INET6)
         except OSError as exc:
             self.skipTest(f"no IPv6 loopback to bind: {exc}")
+
+
+class NoV6OnlyOption(socket.socket):
+    """A platform with IPv6 sockets but no ``IPV6_V6ONLY`` to set."""
+
+    def setsockopt(self, level, option, *args):
+        if level == socket.IPPROTO_IPV6 and option == socket.IPV6_V6ONLY:
+            raise OSError(errno.EINVAL, "option not supported here")
+        return super().setsockopt(level, option, *args)
+
+
+class SocketFallback(unittest.TestCase):
+    """Which failures fall back to IPv4, and which are the caller's to hear.
+
+    Driven through ``_open_socket`` with a socket class that fails in one
+    chosen way, since a CI runner cannot be made to lack IPv6 on demand.
+    """
+
+    def open(self, bind, cls):
+        with mock.patch("socket.socket", cls):
+            sock = _open_socket(bind, 0, True, None)
+        self.addCleanup(sock.close)
+        return sock
+
+    def test_a_named_v6_address_does_not_need_the_dual_stack_option(self):
+        # Only :: can receive IPv4, so ::1 has no use for the option and must
+        # not fail for want of it. IPv6 is probed apart from the code under
+        # test, or a regression here would skip instead of failing.
+        try:
+            with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as probe:
+                probe.bind(("::1", 0))
+        except OSError as exc:
+            self.skipTest(f"no IPv6 loopback to bind: {exc}")
+        self.assertEqual(self.open("::1", NoV6OnlyOption).family,
+                         socket.AF_INET6)
+
+    def test_the_wildcard_falls_back_when_the_option_is_refused(self):
+        self.assertEqual(self.open(None, NoV6OnlyOption).family, socket.AF_INET)
+
+    def test_an_explicit_v6_wildcard_does_not_fall_back(self):
+        # "::" was asked for by name; binding 0.0.0.0 instead would be
+        # listening somewhere the caller did not choose.
+        with self.assertRaises(OSError):
+            self.open("::", NoV6OnlyOption)
 
 
 if __name__ == "__main__":

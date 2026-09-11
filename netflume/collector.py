@@ -52,8 +52,9 @@ def _open_socket(bind, port, reuse_address, rcvbuf):
     than a tidying-up.
 
     A named address picks its own family, so "0.0.0.0" still gives an
-    IPv4-only socket and "::" or an IPv6 literal gives a v6 one. A hostname
-    is bound over IPv4, which is what this did before there was a choice.
+    IPv4-only socket, "::" gives the same dual-stack socket as the default,
+    and any other IPv6 literal gives a plain v6 one. A hostname is bound over
+    IPv4, which is what this did before there was a choice.
 
     The wildcard falls back to IPv4 if the platform has no IPv6 at all, since
     a collector that will not start is worse than one that serves half the
@@ -68,10 +69,15 @@ def _open_socket(bind, port, reuse_address, rcvbuf):
         family, host, dual = socket.AF_INET6, "::", True
     else:
         try:
-            if ipaddress.ip_address(bind).version == 6:
-                family, dual = socket.AF_INET6, True
+            addr = ipaddress.ip_address(bind)
         except ValueError:
             pass                # a hostname: IPv4, as before
+        else:
+            if addr.version == 6:
+                # Only the unspecified address can receive IPv4 at all, so
+                # for ::1 or any other named v6 address the option means
+                # nothing, and asking for it would only add a way to fail.
+                family, dual = socket.AF_INET6, addr.is_unspecified
 
     sock = None
     if family == socket.AF_INET6:
