@@ -21,7 +21,7 @@ import selectors
 import socket
 import time
 
-from .decoder import Decoder
+from .decoder import Decoder, _exporter_key
 
 __all__ = ["Collector", "DEFAULT_PORT", "DEFAULT_RCVBUF"]
 
@@ -171,7 +171,7 @@ class Collector:
 
     def __init__(self, port=DEFAULT_PORT, bind=None, decoder=None,
                  timeout=1.0, rcvbuf=DEFAULT_RCVBUF, reuse_address=True,
-                 sock=None):
+                 sock=None, accept=None):
         """Bind and get ready to receive.
 
         port, bind    where to listen. bind=None, the default, is every
@@ -197,8 +197,18 @@ class Collector:
                       that clash raise OSError here instead of going silent.
         sock          an already-bound socket to use instead of making one,
                       which is how a test drives this without a real exporter.
+        accept        a predicate on the exporter address, or None to take
+                      everything. A datagram it rejects is counted in
+                      ``stats["rejected"]`` and goes no further: not decoded,
+                      not keyed, and so unable to fill a single table. It is
+                      given the address the decoder would key by, so an IPv4
+                      exporter reaching a dual-stack socket arrives as its
+                      dotted quad. An exception it raises is not caught, since
+                      the address comes from the kernel and not the sender, so
+                      a predicate that raises has a bug worth hearing about.
         """
         self.decoder = decoder if decoder is not None else Decoder()
+        self.accept = accept
         self.timeout = timeout
         self._closed = False
         self._stopping = False
@@ -266,7 +276,7 @@ class Collector:
         data, addr = self._receive(timeout, honour_stop=False)
         if data is None:
             return None
-        return self.decoder.decode(data, addr[0])
+        return self._decode(data, addr)
 
     def messages(self, timeout=None):
         """Yield one :class:`~netflume.decoder.Message` per datagram.
@@ -281,7 +291,7 @@ class Collector:
             data, addr = self._receive(timeout)
             if data is None:
                 continue
-            message = self.decoder.decode(data, addr[0])
+            message = self._decode(data, addr)
             if message is not None:
                 yield message
 
@@ -342,6 +352,20 @@ class Collector:
         return False
 
     # == the one place that touches the socket ===============================
+
+    def _decode(self, data, addr):
+        """Decode one datagram, unless `accept` turns its sender away.
+
+        The filter runs before the decoder sees anything, which is the point
+        of it: a rejected datagram costs a counter increment and nothing else,
+        so a flood from sources nobody listed never reaches a table that has
+        a ceiling to hit.
+        """
+        exporter = _exporter_key(addr[0])
+        if self.accept is not None and not self.accept(exporter):
+            self.decoder.stats["rejected"] += 1
+            return None
+        return self.decoder.decode(data, exporter)
 
     def _receive(self, timeout, honour_stop=True):
         """(data, addr), or (None, None) if nothing was ready in time.

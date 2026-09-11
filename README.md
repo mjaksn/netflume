@@ -103,7 +103,7 @@ skip to [Parsing without a socket](#parsing-without-a-socket).
 
 ```python
 Collector(port=2055, bind=None, decoder=None, timeout=1.0,
-          rcvbuf=4*1024*1024, reuse_address=True, sock=None)
+          rcvbuf=4*1024*1024, reuse_address=True, sock=None, accept=None)
 ```
 
 The socket is bound in the constructor, so a port already in use raises
@@ -117,6 +117,7 @@ The socket is bound in the constructor, so a port already in use raises
 | `rcvbuf` | kernel receive buffer to request. None leaves the system default. |
 | `reuse_address` | set `SO_REUSEADDR` before binding, default `True`. A restart takes the port back immediately rather than waiting for the old socket. On UDP it also lets a **second process bind the same port**, after which only one of them receives, so if a bound collector sees no traffic, suspect this first. `False` makes the clash raise `OSError` at construction instead. |
 | `sock` | an already-bound socket to use instead of making one. |
+| `accept` | a predicate on the exporter address, or None to take everything. A datagram it rejects is counted in `stats["rejected"]` and goes no further: never decoded, never keyed, so it cannot fill a table. It receives the address the decoder keys by, so an IPv4 exporter on the dual-stack socket arrives as its dotted quad and an allow-list written that way matches. An exception it raises propagates. **It is a filter, not authentication**: see [Ceilings](#ceilings). |
 
 ### Three ways to read it
 
@@ -515,6 +516,7 @@ zero.
 | `missed_exports` | total gap, all streams |
 | `v5_msgs`, `v9_msgs`, `v10_msgs` | messages per version |
 | `events_dropped` | events discarded because the queue was full, see [Events](#events) |
+| `rejected` | datagrams turned away by the collector's `accept` filter, and so not counted in `packets` |
 
 `deferred` climbing at the start is normal and not a fault: v9 and IPFIX
 exporters resend templates periodically, often every few minutes, and data
@@ -527,6 +529,14 @@ before the first one cannot be decoded by anybody.
 Every table keyed by exporter has a ceiling. A UDP source address is whatever
 the sender typed, so anything keyed by one and never evicted is a memory leak
 that anyone able to reach the socket can pull on.
+
+A collector that knows its exporters can go further and pass `accept`, so that
+a flood from addresses nobody listed is counted and dropped before it reaches
+any of these tables. That stops a flood from random addresses outright. It
+does not stop a sender who forges the address of an exporter you did list,
+because UDP carries no proof of where a datagram came from; such a sender still
+gets in, under that exporter's key. The ceilings below are what hold in that
+case.
 
 | constant | default | what it bounds | on overflow |
 | --- | --- | --- | --- |
@@ -782,7 +792,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-337 tests, no dependencies, about a second. Several use `subTest`, so the
+342 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
@@ -830,7 +840,8 @@ agreement with any particular vendor's interpretation.
   defaults are far above a real deployment, but a collector facing tens of
   thousands of distinct source addresses, or a spoofing flood, loses the
   least recently used templates and cannot decode their flows until the
-  exporter resends.
+  exporter resends. An `accept` filter keeps unlisted sources out entirely,
+  though not one forging a listed address.
 - **A truncated template is refused, not salvaged.** A template set that ends
   mid-template is dropped rather than stored short, so the flows in that
   datagram are lost. The alternative is worse: a template missing fields cuts
