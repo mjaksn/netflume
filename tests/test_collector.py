@@ -332,6 +332,25 @@ class NoV6OnlyOption(socket.socket):
         return super().setsockopt(level, option, *args)
 
 
+def v6_bind_fails_with(code):
+    """A socket class whose IPv6 binds fail with `code`, as some hosts do."""
+    class Refusing(socket.socket):
+        def bind(self, address):
+            if self.family == socket.AF_INET6:
+                raise OSError(code, "refused by the test")
+            return super().bind(address)
+    return Refusing
+
+
+class NoV6Sockets(socket.socket):
+    """A host with no IPv6 at all: the socket itself cannot be made."""
+
+    def __init__(self, family=-1, *args, **kwargs):
+        if family == socket.AF_INET6:
+            raise OSError(errno.EAFNOSUPPORT, "refused by the test")
+        super().__init__(family, *args, **kwargs)
+
+
 class SocketFallback(unittest.TestCase):
     """Which failures fall back to IPv4, and which are the caller's to hear.
 
@@ -365,6 +384,25 @@ class SocketFallback(unittest.TestCase):
         # listening somewhere the caller did not choose.
         with self.assertRaises(OSError):
             self.open("::", NoV6OnlyOption)
+
+    def test_the_wildcard_falls_back_when_the_socket_cannot_be_made(self):
+        self.assertEqual(self.open(None, NoV6Sockets).family, socket.AF_INET)
+
+    def test_the_wildcard_falls_back_when_the_bind_finds_no_ipv6(self):
+        # A container with IPv6 switched off makes the socket and sets the
+        # option happily, then refuses the bind.
+        for code in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+            with self.subTest(errno=code):
+                sock = self.open(None, v6_bind_fails_with(code))
+                self.assertEqual(sock.family, socket.AF_INET)
+
+    def test_a_port_in_use_is_still_an_error(self):
+        # Falling back here would bind IPv4 while something else holds the
+        # port on IPv6, which is the silent half-collector reuse_address
+        # already warns about.
+        with self.assertRaises(OSError) as caught:
+            self.open(None, v6_bind_fails_with(errno.EADDRINUSE))
+        self.assertEqual(caught.exception.errno, errno.EADDRINUSE)
 
 
 if __name__ == "__main__":

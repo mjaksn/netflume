@@ -56,18 +56,20 @@ def _open_socket(bind, port, reuse_address, rcvbuf):
     and any other IPv6 literal gives a plain v6 one. A hostname is bound over
     IPv4, which is what this did before there was a choice.
 
-    The wildcard falls back to IPv4 if the platform has no IPv6 at all, since
-    a collector that will not start is worse than one that serves half the
-    network. A *named* v6 address does not fall back: quietly binding
-    0.0.0.0 when the caller asked for ::1 would listen somewhere they did not
-    ask for, and that is worth an exception rather than a log line.
+    The wildcard falls back to IPv4 where the host has no IPv6 to give it,
+    since a collector that will not start is worse than one that serves half
+    the network. See :func:`_dual_stack` for what counts. A *named* v6
+    address does not fall back: quietly binding 0.0.0.0 when the caller asked
+    for ::1 would listen somewhere they did not ask for, and that is worth an
+    exception rather than a log line.
     """
-    family = socket.AF_INET
-    host = bind
-    dual = False
     if bind is None:
-        family, host, dual = socket.AF_INET6, "::", True
+        sock = _dual_stack(port, reuse_address, rcvbuf)
+        if sock is not None:
+            return sock
+        family, host, dual = socket.AF_INET, "0.0.0.0", False
     else:
+        family, host, dual = socket.AF_INET, bind, False
         try:
             addr = ipaddress.ip_address(bind)
         except ValueError:
@@ -79,23 +81,65 @@ def _open_socket(bind, port, reuse_address, rcvbuf):
                 # nothing, and asking for it would only add a way to fail.
                 family, dual = socket.AF_INET6, addr.is_unspecified
 
-    sock = None
-    if family == socket.AF_INET6:
-        try:
-            sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
-            if dual:
-                sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
-        except (OSError, AttributeError) as exc:
-            if sock is not None:
-                sock.close()
-            if bind is not None:
-                raise
-            log.info("no dual-stack socket available (%s); "
-                     "listening on IPv4 only", exc)
-            sock, family, host = None, socket.AF_INET, "0.0.0.0"
-    if sock is None:
-        sock = socket.socket(family, socket.SOCK_DGRAM)
+    sock = socket.socket(family, socket.SOCK_DGRAM)
+    try:
+        if dual:
+            sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+        _prepare_and_bind(sock, host, port, reuse_address, rcvbuf)
+    except BaseException:
+        sock.close()
+        raise
+    return sock
 
+
+#: What binding the v6 wildcard reports on a host that will make an IPv6
+#: socket but has no IPv6 to bind it to, which is how a container with IPv6
+#: switched off behaves. Python names these the same on Windows, where the
+#: numbers underneath are the Winsock ones. Anything else, a port already in
+#: use above all, is a real problem and is the caller's to hear about.
+_NO_IPV6 = frozenset((errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT))
+
+
+def _dual_stack(port, reuse_address, rcvbuf):
+    """The default socket, or None where this host cannot provide one.
+
+    Three places can say no: making the socket, clearing ``IPV6_V6ONLY``, and
+    the bind. The first two only ever fail for want of IPv6, so any failure
+    there means fall back. The bind can fail for ordinary reasons too, so it
+    falls back only on the errors in :data:`_NO_IPV6` and raises the rest.
+    """
+    try:
+        sock = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+    except OSError as exc:
+        _no_dual_stack(exc)
+        return None
+    try:
+        sock.setsockopt(socket.IPPROTO_IPV6, socket.IPV6_V6ONLY, 0)
+    except (OSError, AttributeError) as exc:
+        sock.close()
+        _no_dual_stack(exc)
+        return None
+    try:
+        _prepare_and_bind(sock, "::", port, reuse_address, rcvbuf)
+    except OSError as exc:
+        sock.close()
+        if exc.errno not in _NO_IPV6:
+            raise
+        _no_dual_stack(exc)
+        return None
+    except BaseException:
+        sock.close()
+        raise
+    return sock
+
+
+def _no_dual_stack(reason):
+    log.info("no dual-stack socket available (%s); listening on IPv4 only",
+             reason)
+
+
+def _prepare_and_bind(sock, host, port, reuse_address, rcvbuf):
+    """The options that apply to either family, then the bind itself."""
     if reuse_address:
         sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     if rcvbuf:
@@ -103,12 +147,7 @@ def _open_socket(bind, port, reuse_address, rcvbuf):
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, rcvbuf)
         except OSError as exc:
             log.debug("could not set SO_RCVBUF to %d: %s", rcvbuf, exc)
-    try:
-        sock.bind((host, port))
-    except OSError:
-        sock.close()
-        raise
-    return sock
+    sock.bind((host, port))
 
 
 class Collector:
