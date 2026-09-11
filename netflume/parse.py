@@ -151,22 +151,36 @@ class TemplateStore:
         self.dropped = 0
         self.max_templates = max_templates
         self._events = deque(maxlen=max_pending)
+        # Internal, and not a tuning knob. False keeps every template on the
+        # field-by-field walk, which exists so that tests/test_compiled.py can
+        # hold the two decode paths equal on the same input.
+        self._compile = True
 
     def put(self, exporter, domain, tid, fields, options=False):
         """Record a template. Returns True when it is new or has changed."""
         key = (exporter, domain, tid)
         old = self.templates.get(key)
-        self.templates[key] = (fields, options)
+        # The compiled reader lives in the entry rather than in a cache of its
+        # own. Eviction pops the entry, so the reader goes with it and is held
+        # to MAX_TEMPLATES like everything else keyed by an exporter; a
+        # separate cache would be one more table a sender could grow.
+        if old is not None and old[0] == fields:
+            compiled = old[2]           # a resend: already compiled
+        else:
+            compiled = compile_template(fields) if self._compile else None
+        self.templates[key] = (fields, options, compiled)
         self.templates.move_to_end(key)
         while len(self.templates) > self.max_templates:
             self.templates.popitem(last=False)
             self.evicted += 1
-        # Both halves of the entry, not the layout alone. An exporter may
+        # The layout and the kind, not the layout alone. An exporter may
         # reuse an ID for the other kind of template without changing a single
         # field specification, and that is a redefinition worth reporting even
         # though nothing about the layout moved: every record for that ID
-        # afterwards leaves by the other door, options rather than flows.
-        if old is None or old != (fields, options):
+        # afterwards leaves by the other door, options rather than flows. Not
+        # the compiled reader either, which is derived from the layout, so
+        # comparing it would only ever repeat what the layout already said.
+        if old is None or old[:2] != (fields, options):
             self.learned += 1
             # The event gets a copy. The list handed in stays in the store and
             # is what every later record for this ID is cut up by, so an event
@@ -206,10 +220,19 @@ class TemplateStore:
 
     def get(self, exporter, domain, tid):
         """Returns (fields, is_options), or (None, False) if not learned yet."""
+        fields, options, _compiled = self._lookup(exporter, domain, tid)
+        return fields, options
+
+    def _lookup(self, exporter, domain, tid):
+        """(fields, is_options, compiled reader or None), for the parser.
+
+        :meth:`get` keeps its two-value shape for callers; the reader is an
+        implementation detail of :func:`parse_v9_or_ipfix`.
+        """
         key = (exporter, domain, tid)
         entry = self.templates.get(key)
         if entry is None:
-            return (None, False)
+            return (None, False, None)
         # Reading counts as use: an exporter still sending data for a template
         # must not have it evicted by a flood of addresses that never send any.
         self.templates.move_to_end(key)
@@ -331,6 +354,95 @@ def record_min_length(fields):
     for _name, _kind, flen in fields:
         total += 1 if flen == 0xFFFF else flen
     return max(total, 1)
+
+
+#: Struct codes for the unsigned integer widths that come out of an unpack
+#: already final. Every other fixed-length field is unpacked as bytes and
+#: handed to decode_value exactly as the walk hands it.
+_UINT_CODES = {1: "B", 2: "H", 4: "I", 8: "Q"}
+
+
+def compile_template(fields):
+    """(record size, set reader) for a fixed-length template, or None.
+
+    :func:`parse_v5` has always read a record in one ``struct.Struct`` call,
+    while :func:`parse_data_record` pays a slice, a bounds check and a
+    function call for every field of every record. When every field of a
+    template is fixed length, its whole layout is known the moment the
+    template arrives, so the unpacking can be decided once, here, instead.
+
+    The reader takes ``(data, start, end)`` spanning a whole number of
+    records and returns them as a list, each exactly the dict the walk would
+    have built. Declared unsigned integers of width 1, 2, 4 and 8 need nothing
+    after the unpack. A four-byte IPv4 address goes straight to ``inet_ntoa``,
+    which is what :func:`decode_value` would call for it and cannot fail on
+    four bytes. Every other field keeps its :func:`decode_value` call, so a
+    string, a MAC or an element nobody has named decodes as it always did.
+
+    None means the template keeps the walk. Two kinds are refused. One with a
+    variable-length field (0xFFFF) has no fixed layout to compile. One whose
+    fields add up to no bytes at all would give records that never advance,
+    and a loop stepping through a set by their size would not terminate.
+    """
+    try:
+        if any(flen == 0xFFFF for _name, _kind, flen in fields):
+            return None
+        codes = []
+        direct = []
+        decoded = []
+        for i, (_name, kind, flen) in enumerate(fields):
+            if kind == "uint" and flen in _UINT_CODES:
+                codes.append(_UINT_CODES[flen])
+                continue
+            codes.append(f"{flen}s")
+            if kind == "ipv4" and flen == 4:
+                direct.append((i, inet_ntoa))
+            else:
+                decoded.append((i, kind))
+        layout = struct.Struct("!" + "".join(codes))
+        names = tuple(name for name, _kind, _flen in fields)
+    except (TypeError, ValueError, struct.error):
+        # Not a layout this can express. TemplateStore.put is public and has
+        # always stored whatever it was handed, so a caller's own field shape
+        # is declined here rather than refused there: it keeps the walk.
+        return None
+    if layout.size == 0:
+        return None
+    iter_unpack = layout.iter_unpack
+    direct_t = tuple(direct)
+    decoded_t = tuple(decoded)
+
+    def convert(values):
+        values = list(values)
+        for i, conv in direct_t:
+            values[i] = conv(values[i])
+        for i, kind in decoded_t:
+            values[i] = decode_value(values[i], kind)
+        return values
+
+    if len(set(names)) != len(names):
+        # A repeated key keeps the walk's rule, which depends on order: a
+        # value meaning "not filled in" never displaces one already present.
+        # See parse_data_record for why dual-stack templates need it.
+        def read_set(data, start, end):
+            out = []
+            for values in iter_unpack(data[start:end]):
+                rec = {}
+                for name, value in zip(names, convert(values), strict=True):
+                    if value in UNSPECIFIED and name in rec:
+                        continue
+                    rec[name] = value
+                out.append(rec)
+            return out
+    elif direct_t or decoded_t:
+        def read_set(data, start, end):
+            return [dict(zip(names, convert(values), strict=True))
+                    for values in iter_unpack(data[start:end])]
+    else:
+        def read_set(data, start, end):
+            return [dict(zip(names, values, strict=True))
+                    for values in iter_unpack(data[start:end])]
+    return layout.size, read_set
 
 
 def parse_data_record(data, off, set_end, fields, ipfix, dedupe=False):
@@ -490,12 +602,23 @@ def parse_v9_or_ipfix(data, exporter, store, stats=None):
                     stats["templates_new"] += 1
 
         elif set_id >= 256:
-            fields, is_options = store.get(exporter, hdr["domain"], set_id)
+            fields, is_options, compiled = store._lookup(
+                exporter, hdr["domain"], set_id)
             if not fields:
                 stats["deferred"] += 1
                 continue
-            min_len = record_min_length(fields)
             sink = options if is_options else records
+            if compiled is not None:
+                # Every record is the same size, so the whole records in the
+                # set are known before any is read, and what is left over at
+                # the end is set padding: the same line the walk draws with
+                # record_min_length.
+                size, read_set = compiled
+                end = body + (set_end - body) // size * size
+                if end > body:
+                    sink.extend(read_set(data, body, end))
+                continue
+            min_len = record_min_length(fields)
             # Decided once for the set rather than once per record: hardly any
             # template repeats a key, and this is the hot path.
             names = [f[0] for f in fields]

@@ -323,7 +323,7 @@ class TemplateEvents(unittest.TestCase):
         # build, and tools/fuzz.py exists to keep it that way, so there is no
         # honest set of bytes that parses one set and then throws.
         class Exploding(TemplateStore):
-            def get(self, *args):
+            def _lookup(self, *args):             # what the parser reads through
                 raise RuntimeError("boom")
 
         self.decoder.templates = Exploding()
