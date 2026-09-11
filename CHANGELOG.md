@@ -71,6 +71,17 @@ reachable from `netflume.__all__` plus the module-level names listed under
   optional `stats` argument `parse_v9_or_ipfix` already took, so the parsing
   layer counts it too.
 
+### Fixed
+
+- **Flows from one datagram are dated against one reading of the clock.**
+  `Message.typed_flows()`, and so `Collector.flows()` and
+  `Decoder.flows(typed=True)`, passed no `now` down, so `flow_timestamp` read
+  the clock afresh for every v5 and v9 flow. Flows that arrived together
+  could straddle a tick and be judged against different moments by the
+  uptime-wrap guard, which near its threshold could give one flow a
+  reconstructed start and the next the export-time fallback. The clock is now
+  read once per message. A `now` passed in is still used as given.
+
 ## [0.5.2] - 2026-09-10
 
 ### Changed

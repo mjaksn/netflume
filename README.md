@@ -795,7 +795,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-342 tests, no dependencies, about a second. Several use `subTest`, so the
+351 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in

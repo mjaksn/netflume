@@ -2,6 +2,7 @@
 
 import struct
 import unittest
+from unittest import mock
 
 from netflume import Decoder, Flow, Message, TemplateStore
 from netflume.events import (
@@ -334,6 +335,40 @@ class TemplateEvents(unittest.TestCase):
         self.assertEqual([e.template_id for e in events
                           if isinstance(e, TemplateLearned)], [400])
         self.assertTrue(any(isinstance(e, DecodeError) for e in events))
+
+
+class OneClockPerMessage(unittest.TestCase):
+    """Flows from one datagram are dated against one reading of the clock."""
+
+    BASE = 1700000000
+
+    def typed(self, readings):
+        message = Decoder().decode(
+            p.v5_message(count=3, unix_secs=self.BASE), "10.0.0.1")
+        clock = iter(readings)
+        with mock.patch("time.time", side_effect=lambda: next(clock)) as tick:
+            flows = message.typed_flows()
+        return flows, tick.call_count
+
+    def test_the_clock_is_read_once_for_the_whole_message(self):
+        _, calls = self.typed([self.BASE] * 10)
+        self.assertEqual(calls, 1)
+
+    def test_flows_cannot_straddle_a_reading(self):
+        # The first reading is close to the export time, so the uptime-based
+        # start is believed. Every later reading is ten days out, which the
+        # wrap guard would reject. Read per flow, the first flow would get the
+        # reconstructed start and the rest the fallback: one datagram, two
+        # different answers.
+        flows, _ = self.typed([self.BASE] + [self.BASE + 10 * 86400] * 10)
+        self.assertEqual({flow.start for flow in flows}, {self.BASE - 10.0})
+
+    def test_a_given_now_is_used_as_it_is(self):
+        message = Decoder().decode(
+            p.v5_message(count=3, unix_secs=self.BASE), "10.0.0.1")
+        with mock.patch("time.time") as tick:
+            message.typed_flows(now=self.BASE)
+        tick.assert_not_called()
 
 
 if __name__ == "__main__":
