@@ -9,6 +9,26 @@ The public API is what [the README](README.md) documents, which is everything
 reachable from `netflume.__all__` plus the module-level names listed under
 *Everything else exported*. Internals not named there may move without notice.
 
+## [Unreleased]
+
+### Changed
+
+- **v9 and IPFIX decode three to four times faster on a typical template.**
+  A template whose fields are all fixed length, which is nearly every one an
+  exporter sends, is now compiled into a single `struct.Struct` when it is
+  learned, and each data set is unpacked a whole set at a time rather than a
+  field at a time. `parse_v5` has always worked this way, which is why it was
+  the fastest path in the package. On a sixteen-field template, measured back
+  to back against 0.6.0 on one desktop, both versions went from under 180,000
+  records a second to about 700,000. Narrow templates gain less, since there
+  is less per-record work to remove.
+
+  Nothing a caller sees changes. A template with a variable-length field is
+  still decoded field by field, and `tests/test_compiled.py` holds the two
+  paths to identical records, events and counters over the fuzzer's corpus.
+  The compiled form lives in the template's own store entry, so it is evicted
+  with it and adds no table of its own.
+
 ## [0.6.0] - 2026-09-10
 
 ### Migrating from 0.5
@@ -307,6 +327,7 @@ Hostname resolution is deliberately not here. It is
 [lanname](https://github.com/mjaksn/lanname), a separate package that nothing
 in this one depends on.
 
+[Unreleased]: https://github.com/mjaksn/netflume/compare/v0.6.0...HEAD
 [0.6.0]: https://github.com/mjaksn/netflume/releases/tag/v0.6.0
 [0.5.2]: https://github.com/mjaksn/netflume/releases/tag/v0.5.2
 [0.5.1]: https://github.com/mjaksn/netflume/releases/tag/v0.5.1

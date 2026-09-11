@@ -795,7 +795,7 @@ malformed datagram is counted and discarded, never raised.
 python -m unittest discover
 ```
 
-351 tests, no dependencies, about a second. Several use `subTest`, so the
+363 tests, no dependencies, about a second. Several use `subTest`, so the
 number of individual checks is higher than the number of tests.
 
 The suite is built around synthetic messages assembled byte by byte in
@@ -811,6 +811,13 @@ timestamps read as epoch counts, a truncated template fabricating flows, a
 dual-stack template erasing its own addresses, a sampling rate wiped by another
 observation domain, and the [ceilings](#ceilings), which are asserted rather
 than assumed.
+
+`tests/test_compiled.py` holds the two ways a v9 or IPFIX record is decoded to
+the same answer. A template whose fields are all fixed length is compiled into
+one `struct.Struct` when it is learned; one with a variable-length field is
+walked a field at a time. Both paths run over the same corpus, the fuzzer's
+seed messages, every prefix of each, and a few thousand of its mutations under
+a fixed seed, and the records, events and counters are required to match.
 
 `Decoder.decode` promises never to raise, and that promise is attacked rather
 than trusted:
@@ -895,13 +902,6 @@ three headings are the three things this package optimises for.
 
 ### Performance
 
-- **Template-compiled unpacking.** When every field in a template is
-  fixed-length, which is the common case, the layout is known the moment the
-  template is learned. Building one `struct.Struct` per template and unpacking
-  a whole record in a single call replaces per-field slicing and integer
-  conversion.
-  This is the largest single decode win available and the reason the template
-  store is a first-class object rather than a dictionary.
 - **`memoryview` over the datagram.** Field extraction currently slices, and a
   slice copies. A view does not.
 - **Selective decoding.** An optional field allow-list on the `Decoder`, so a

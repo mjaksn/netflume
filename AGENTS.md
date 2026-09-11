@@ -31,7 +31,7 @@ public surface moves.
 All four run from the repository root and need no fixture or service.
 
 ```bash
-python -m unittest discover      # 351 tests, about a second
+python -m unittest discover      # 363 tests, about a second
 python -m ruff check .
 python -m mypy netflume
 python tools/fuzz.py --seconds 60
@@ -170,6 +170,13 @@ Points that are easy to get wrong and are settled deliberately:
 - A truncated template is refused rather than stored short. Storing it
   short would cut every later record for that ID into one real flow plus
   fabricated ones, which reach the caller looking like genuine traffic.
+- A v9 or IPFIX record is decoded one of two ways. `compile_template`
+  turns an all-fixed-length template into one `struct.Struct` when it is
+  learned, and `parse_data_record` walks everything else a field at a
+  time. They must return identical output, so a change to how a value
+  decodes goes into both. `tests/test_compiled.py` runs both over the same
+  corpus and fails on any difference; `TemplateStore._compile = False` is
+  the switch it uses, and exists for nothing else.
 
 `tests/test_hardening.py` is the home for the failure class the fuzzer
 cannot see: input that decodes without raising and returns something
