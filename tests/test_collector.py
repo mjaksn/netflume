@@ -323,6 +323,85 @@ class BindChoosesTheFamily(unittest.TestCase):
             self.skipTest(f"no IPv6 loopback to bind: {exc}")
 
 
+class AcceptFilter(unittest.TestCase):
+    """A rejected source goes no further than a counter."""
+
+    TEMPLATE = p.ipfix([p.data_template(400, p.TIMED_FLOW_FIELDS)])
+
+    def make(self, accept, bind="127.0.0.1"):
+        collector = Collector(port=0, bind=bind, timeout=0.25, accept=accept)
+        self.addCleanup(collector.close)
+        return collector
+
+    def send(self, collector, data, family=socket.AF_INET, host="127.0.0.1"):
+        sender = socket.socket(family, socket.SOCK_DGRAM)
+        self.addCleanup(sender.close)
+        sender.sendto(data, (host, collector.address[1]))
+
+    def test_a_rejected_source_never_reaches_the_decoder(self):
+        collector = self.make(lambda addr: False)
+        self.send(collector, self.TEMPLATE)
+        self.assertIsNone(collector.poll(timeout=5.0))
+        self.assertEqual(collector.stats["rejected"], 1)
+        # Not counted as received, and nothing learned from it: the whole
+        # point is that it cannot fill a table.
+        self.assertEqual(collector.stats["packets"], 0)
+        self.assertEqual(len(collector.decoder.templates.templates), 0)
+
+    def test_an_accepted_source_is_decoded_as_before(self):
+        collector = self.make(lambda addr: addr == "127.0.0.1")
+        self.send(collector, p.v5(1))
+        message = collector.poll(timeout=5.0)
+        self.assertIsNotNone(message)
+        self.assertEqual(message.header["exporter"], "127.0.0.1")
+        self.assertEqual(collector.stats["rejected"], 0)
+
+    def test_iteration_skips_what_the_filter_rejects(self):
+        # Rejects the first datagram and takes the second, both from the one
+        # loopback address. Paced, for the reason CollectorTestCase.feed is.
+        seen = []
+        collector = self.make(lambda addr: bool(seen.append(addr)) or len(seen) > 1)
+
+        def run():
+            self.send(collector, p.v5(seq=1))
+            deadline = time.monotonic() + 5.0
+            while (collector.stats["rejected"] == 0
+                   and time.monotonic() < deadline):
+                time.sleep(0.002)
+            self.send(collector, p.v5(seq=2))
+
+        thread = threading.Thread(target=run, daemon=True)
+        thread.start()
+        self.addCleanup(thread.join, 5.0)
+        guard = threading.Timer(10.0, collector.stop)
+        guard.start()
+        self.addCleanup(guard.cancel)
+        message = next(collector.messages())
+        self.assertEqual(message.header["sequence"], 2)
+        self.assertEqual(collector.stats["rejected"], 1)
+
+    def test_the_predicate_sees_the_address_the_tables_will_use(self):
+        # On a dual-stack socket the kernel reports ::ffff:127.0.0.1. An
+        # allow-list written as dotted quads has to match, or it would turn
+        # away every IPv4 exporter it was written to admit.
+        seen = []
+        collector = self.make(lambda addr: seen.append(addr) or True, bind=None)
+        if collector.socket.family != socket.AF_INET6:
+            self.skipTest("no dual-stack socket on this machine")
+        self.send(collector, p.v5(1))
+        self.assertIsNotNone(collector.poll(timeout=5.0))
+        self.assertEqual(seen, ["127.0.0.1"])
+
+    def test_a_predicate_that_raises_is_not_swallowed(self):
+        # The address is the kernel's, not the sender's, so a predicate that
+        # raises on it has a bug. Hiding that as a rejection would drop
+        # traffic silently for as long as nobody read the counter.
+        collector = self.make(lambda addr: 1 / 0)
+        self.send(collector, p.v5(1))
+        with self.assertRaises(ZeroDivisionError):
+            collector.poll(timeout=5.0)
+
+
 class NoV6OnlyOption(socket.socket):
     """A platform with IPv6 sockets but no ``IPV6_V6ONLY`` to set."""
 

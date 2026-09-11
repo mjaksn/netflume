@@ -41,6 +41,24 @@ reachable from `netflume.__all__` plus the module-level names listed under
   mapped address to `Decoder.decode` itself. The parsing functions
   underneath are unchanged and key by whatever they are given.
 
+### Added
+
+- **`Collector(accept=...)` turns away sources you did not list.** A
+  predicate on the exporter address; a datagram it rejects is counted in the
+  new `stats["rejected"]` and goes no further, so it is never decoded, never
+  keyed, and cannot fill one of the per-exporter tables. Every one of those
+  tables has a ceiling, which means a flood degrades a collector rather than
+  killing it, and the filter means a flood from addresses nobody listed never
+  reaches them at all. The predicate is given the address the decoder keys by,
+  so an IPv4 exporter on the new dual-stack socket arrives as its dotted quad
+  and an allow-list written that way matches.
+
+  It is a filter and not authentication. UDP carries no proof of where a
+  datagram came from, so a sender who forges the address of an exporter you
+  did list still gets in under that exporter's key, and the ceilings are what
+  hold then. Additive, with a default of None, so nothing changes for a
+  caller who does not pass it.
+
 ## [0.5.2] - 2026-09-10
 
 ### Changed
