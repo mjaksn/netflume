@@ -31,7 +31,7 @@ public surface moves.
 All four run from the repository root and need no fixture or service.
 
 ```bash
-python -m unittest discover      # 330 tests, about a second
+python -m unittest discover      # 337 tests, about a second
 python -m ruff check .
 python -m mypy netflume
 python tools/fuzz.py --seconds 60
