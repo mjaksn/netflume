@@ -184,7 +184,7 @@ class Decoder:
 
         try:
             if version == 5:
-                hdr, records, opts = parse_v5(data, exporter)
+                hdr, records, opts = parse_v5(data, exporter, self.stats)
             else:
                 hdr, records, opts = parse_v9_or_ipfix(
                     data, exporter, self.templates, self.stats)
