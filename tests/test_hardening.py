@@ -452,5 +452,69 @@ class TheEventQueueIsBounded(unittest.TestCase):
         self.assertEqual(decoder.take_events(), [])
 
 
+class OneExporterOneKey(unittest.TestCase):
+    """A dual-stack socket must not split a router into two exporters.
+
+    Every per-exporter table is keyed by the address string, so the mapped
+    spelling an ``AF_INET6`` socket reports has to fold back to the dotted
+    quad before it reaches any of them. Otherwise the templates a router
+    already sent are filed under a key nothing looks up again.
+    """
+
+    DOTTED = "192.0.2.1"
+    MAPPED = "::ffff:192.0.2.1"
+    #: The same address as netflume's own IPv6 renderer spells it, which is
+    #: what a caller feeding addresses back in from a record would pass.
+    MAPPED_HEX = "::ffff:c0a8:10a"
+
+    def template_keys(self, *exporters):
+        """Decode one template from each spelling; return the store's keys."""
+        decoder = Decoder()
+        msg = p.ipfix([p.data_template(400, p.TIMED_FLOW_FIELDS)])
+        for exporter in exporters:
+            decoder.decode(msg, exporter)
+        return set(decoder.templates.templates)
+
+    def test_the_mapped_and_dotted_forms_reach_one_template_entry(self):
+        keys = self.template_keys(self.DOTTED, self.MAPPED)
+        self.assertEqual(len(keys), 1)
+        self.assertEqual({key[0] for key in keys}, {self.DOTTED})
+
+    def test_the_hex_spelling_of_a_mapped_address_folds_too(self):
+        keys = self.template_keys("192.168.1.10", self.MAPPED_HEX)
+        self.assertEqual(len(keys), 1)
+        self.assertEqual({key[0] for key in keys}, {"192.168.1.10"})
+
+    def test_the_header_carries_the_normalised_address(self):
+        decoder = Decoder()
+        message = decoder.decode(p.v5(1), self.MAPPED)
+        self.assertEqual(message.header["exporter"], self.DOTTED)
+
+    def test_a_real_ipv6_exporter_keeps_its_own_address(self):
+        # Only the mapped forms fold. Two genuinely different exporters stay
+        # two, which is the whole point of keying by address.
+        keys = self.template_keys("2001:db8::1", self.DOTTED)
+        self.assertEqual({key[0] for key in keys}, {"2001:db8::1", self.DOTTED})
+
+    def test_a_sampling_rate_is_found_under_either_spelling(self):
+        # The rate is filed under the dotted quad whichever spelling the
+        # decode was given, so the lookup has to fold the same way or a
+        # caller asking with the spelling it decoded with is told 1.
+        decoder = Decoder()
+        decoder.decode(
+            p.ipfix([p.ipfix_options_template(300, [(145, 4)], [(34, 4)]),
+                     p.data_set(300, struct.pack("!II", 999, 1000))]),
+            self.MAPPED)
+        self.assertEqual(decoder.sampling_rate(self.MAPPED), 1000)
+        self.assertEqual(decoder.sampling_rate(self.DOTTED), 1000)
+
+    def test_something_that_is_not_an_address_is_left_alone(self):
+        # decode never raises, and a caller may key by whatever identifies a
+        # source to it. Refusing input here would be a new way to lose a
+        # datagram.
+        keys = self.template_keys("not an address:", "")
+        self.assertEqual({key[0] for key in keys}, {"not an address:", ""})
+
+
 if __name__ == "__main__":
     unittest.main()

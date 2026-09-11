@@ -5,13 +5,16 @@ kernel picks, and a second socket sends it synthetic exports. That exercises
 the timeout and non-blocking paths for real, which a fake socket cannot.
 """
 
+import errno
 import socket
 import struct
 import threading
 import time
 import unittest
+from unittest import mock
 
 from netflume import Collector, Decoder, Flow
+from netflume.collector import _open_socket
 
 from . import packets as p
 
@@ -239,6 +242,167 @@ class SharedState(CollectorTestCase):
         events = self.collector.decoder.take_events()
         self.assertEqual(len(events), 1)
         self.assertEqual(events[0].reason, "unsupported")
+
+
+class DualStack(unittest.TestCase):
+    """One socket serving both families, with one key per exporter.
+
+    The default bind is every interface on both families, so an IPv4 exporter
+    arrives over the v6 socket in its mapped spelling and has to reach the
+    tables as a dotted quad. Skipped rather than failed on a machine with no
+    IPv6, which is a property of the host and not of this code.
+    """
+
+    def setUp(self):
+        collector = Collector(port=0, timeout=0.25)
+        self.addCleanup(collector.close)
+        if collector.socket.family != socket.AF_INET6:
+            self.skipTest("no dual-stack socket on this machine")
+        self.collector = collector
+        self.port = collector.address[1]
+
+    def send_from(self, family, host, data=None):
+        """Send one datagram from `host` and return what the collector made."""
+        sender = socket.socket(family, socket.SOCK_DGRAM)
+        self.addCleanup(sender.close)
+        try:
+            sender.sendto(p.v5(1) if data is None else data, (host, self.port))
+        except OSError as exc:                  # no loopback for that family
+            self.skipTest(f"cannot send from {host}: {exc}")
+        message = self.collector.poll(timeout=5.0)
+        self.assertIsNotNone(message, f"nothing arrived from {host}")
+        return message
+
+    def test_an_ipv4_exporter_reaches_the_dual_stack_socket(self):
+        message = self.send_from(socket.AF_INET, "127.0.0.1")
+        self.assertEqual(message.header["exporter"], "127.0.0.1")
+
+    def test_an_ipv6_exporter_reaches_it_too(self):
+        message = self.send_from(socket.AF_INET6, "::1")
+        self.assertEqual(message.header["exporter"], "::1")
+
+    def test_both_families_are_decoded_by_the_one_decoder(self):
+        self.send_from(socket.AF_INET, "127.0.0.1")
+        self.send_from(socket.AF_INET6, "::1")
+        self.assertEqual(self.collector.stats["packets"], 2)
+        self.assertEqual(self.collector.stats["v5_msgs"], 2)
+
+    def test_an_ipv4_exporters_templates_are_keyed_by_its_dotted_quad(self):
+        # The socket reports ::ffff:127.0.0.1 for this sender. The template
+        # store must not, or the exporter is invisible to itself after the
+        # collector is restarted onto an IPv4 socket.
+        self.send_from(socket.AF_INET, "127.0.0.1",
+                       p.ipfix([p.data_template(400, p.TIMED_FLOW_FIELDS)]))
+        keys = {key[0] for key in self.collector.decoder.templates.templates}
+        self.assertEqual(keys, {"127.0.0.1"})
+
+
+class BindChoosesTheFamily(unittest.TestCase):
+    """What `bind` is decides which socket gets made."""
+
+    def family_for(self, **kwargs):
+        with Collector(port=0, timeout=0.25, **kwargs) as collector:
+            return collector.socket.family
+
+    def test_the_default_is_dual_stack_where_the_machine_allows_it(self):
+        family = self.family_for()
+        if family == socket.AF_INET:
+            self.skipTest("no IPv6 on this machine, so the fallback took it")
+        self.assertEqual(family, socket.AF_INET6)
+
+    def test_the_ipv4_wildcard_still_means_ipv4_alone(self):
+        self.assertEqual(self.family_for(bind="0.0.0.0"), socket.AF_INET)
+
+    def test_a_named_ipv4_address_is_ipv4(self):
+        self.assertEqual(self.family_for(bind="127.0.0.1"), socket.AF_INET)
+
+    def test_an_ipv6_literal_is_ipv6(self):
+        try:
+            self.assertEqual(self.family_for(bind="::1"), socket.AF_INET6)
+        except OSError as exc:
+            self.skipTest(f"no IPv6 loopback to bind: {exc}")
+
+
+class NoV6OnlyOption(socket.socket):
+    """A platform with IPv6 sockets but no ``IPV6_V6ONLY`` to set."""
+
+    def setsockopt(self, level, option, *args):
+        if level == socket.IPPROTO_IPV6 and option == socket.IPV6_V6ONLY:
+            raise OSError(errno.EINVAL, "option not supported here")
+        return super().setsockopt(level, option, *args)
+
+
+def v6_bind_fails_with(code):
+    """A socket class whose IPv6 binds fail with `code`, as some hosts do."""
+    class Refusing(socket.socket):
+        def bind(self, address):
+            if self.family == socket.AF_INET6:
+                raise OSError(code, "refused by the test")
+            return super().bind(address)
+    return Refusing
+
+
+class NoV6Sockets(socket.socket):
+    """A host with no IPv6 at all: the socket itself cannot be made."""
+
+    def __init__(self, family=-1, *args, **kwargs):
+        if family == socket.AF_INET6:
+            raise OSError(errno.EAFNOSUPPORT, "refused by the test")
+        super().__init__(family, *args, **kwargs)
+
+
+class SocketFallback(unittest.TestCase):
+    """Which failures fall back to IPv4, and which are the caller's to hear.
+
+    Driven through ``_open_socket`` with a socket class that fails in one
+    chosen way, since a CI runner cannot be made to lack IPv6 on demand.
+    """
+
+    def open(self, bind, cls):
+        with mock.patch("socket.socket", cls):
+            sock = _open_socket(bind, 0, True, None)
+        self.addCleanup(sock.close)
+        return sock
+
+    def test_a_named_v6_address_does_not_need_the_dual_stack_option(self):
+        # Only :: can receive IPv4, so ::1 has no use for the option and must
+        # not fail for want of it. IPv6 is probed apart from the code under
+        # test, or a regression here would skip instead of failing.
+        try:
+            with socket.socket(socket.AF_INET6, socket.SOCK_DGRAM) as probe:
+                probe.bind(("::1", 0))
+        except OSError as exc:
+            self.skipTest(f"no IPv6 loopback to bind: {exc}")
+        self.assertEqual(self.open("::1", NoV6OnlyOption).family,
+                         socket.AF_INET6)
+
+    def test_the_wildcard_falls_back_when_the_option_is_refused(self):
+        self.assertEqual(self.open(None, NoV6OnlyOption).family, socket.AF_INET)
+
+    def test_an_explicit_v6_wildcard_does_not_fall_back(self):
+        # "::" was asked for by name; binding 0.0.0.0 instead would be
+        # listening somewhere the caller did not choose.
+        with self.assertRaises(OSError):
+            self.open("::", NoV6OnlyOption)
+
+    def test_the_wildcard_falls_back_when_the_socket_cannot_be_made(self):
+        self.assertEqual(self.open(None, NoV6Sockets).family, socket.AF_INET)
+
+    def test_the_wildcard_falls_back_when_the_bind_finds_no_ipv6(self):
+        # A container with IPv6 switched off makes the socket and sets the
+        # option happily, then refuses the bind.
+        for code in (errno.EADDRNOTAVAIL, errno.EAFNOSUPPORT):
+            with self.subTest(errno=code):
+                sock = self.open(None, v6_bind_fails_with(code))
+                self.assertEqual(sock.family, socket.AF_INET)
+
+    def test_a_port_in_use_is_still_an_error(self):
+        # Falling back here would bind IPv4 while something else holds the
+        # port on IPv6, which is the silent half-collector reuse_address
+        # already warns about.
+        with self.assertRaises(OSError) as caught:
+            self.open(None, v6_bind_fails_with(errno.EADDRINUSE))
+        self.assertEqual(caught.exception.errno, errno.EADDRINUSE)
 
 
 if __name__ == "__main__":
