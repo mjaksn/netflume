@@ -18,10 +18,11 @@ reachable from `netflume.__all__` plus the module-level names listed under
   exporter sends, is now compiled into a single `struct.Struct` when it is
   learned, and each data set is unpacked a whole set at a time rather than a
   field at a time. `parse_v5` has always worked this way, which is why it was
-  the fastest path in the package. On a sixteen-field template, measured back
-  to back against 0.6.0 on one desktop, both versions went from under 180,000
-  records a second to about 700,000. Narrow templates gain less, since there
-  is less per-record work to remove.
+  the fastest path in the package. Measured with `tools/bench.py` back to back
+  against 0.6.0 on one machine, a sixteen-field template decodes 4.0 times as
+  fast in v9 and 3.7 times as fast in IPFIX, and a seven-field one 2.2 times
+  as fast in both. Narrow templates gain less because there is less
+  per-record work to remove.
 
   Nothing a caller sees changes. A template with a variable-length field is
   still decoded field by field, and `tests/test_compiled.py` holds the two
